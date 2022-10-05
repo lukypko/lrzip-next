@@ -1,3 +1,6 @@
+lrzip-next: October 2022 v0.9.3
+Add bzip3 support with -B option - Kamila Szewczyk
+
 lrzip-next: August 2022 v0.9.2
 lzma SDK 22.01
 /tmp is now default TMP directory
