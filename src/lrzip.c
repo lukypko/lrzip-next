@@ -1228,8 +1228,8 @@ done:
 			else	// early 0.8 or <0.8 file without zpaq coding in magic header
 				print_output("\n");
 		}
-		else if (save_ctype == BZIP3_COMPRESS) {
-			print_output("rzip + bzip3 -- Block Size: %d", (1 << control->bzip3_bs) * ONE_MB);
+		else if (save_ctype == CTYPE_BZIP3) {
+			print_output("rzip + bzip3 -- Block Size: %'d\n", (1 << control->bzip3_bs) * ONE_MB);
 		}
 		else
 			print_output("Dunno wtf\n");
