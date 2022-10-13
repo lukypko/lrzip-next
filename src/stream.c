@@ -165,9 +165,9 @@ static int * statequeue = NULL;
 
 static void setup_states(rzip_control * control) {
 	int i;
-	states = malloc(sizeof(struct bz3_state *) * control->threads + 1);
-	statequeue = malloc(sizeof(int) * control->threads + 1);
-	memset(statequeue, 0, sizeof(int) * control->threads + 1);
+	states = malloc(sizeof(struct bz3_state *) * (control->threads + 1));
+	statequeue = malloc(sizeof(int) * (control->threads + 1));
+	memset(statequeue, 0, sizeof(int) * (control->threads + 1));
 	if(!states)
 		fatal("Failed to allocate memory for bzip3 states\n");
 	for (i = 0; i < control->threads + 1; i++) {
