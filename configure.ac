@@ -128,8 +128,6 @@ AC_CHECK_LIB(bz2, BZ2_bzBuffToBuffCompress, ,
         AC_MSG_ERROR([Could not find bz2 library - please install libbz2-dev]))
 AC_CHECK_LIB(lzo2, lzo1x_1_compress, ,
         AC_MSG_ERROR([Could not find lzo2 library - please install liblzo2-dev]))
-AC_CHECK_LIB(bzip3, bz3_encode_block, ,
-        AC_MSG_ERROR([Could not find bzip3 library - please install bzip3]))
 AC_CHECK_LIB(lz4, LZ4_compress_default, ,
 	AC_MSG_ERROR([Could not find lz4 library - please install liblz4-dev]))
 AC_CHECK_LIB(gpg-error, gpg_err_code_to_errno, ,
@@ -160,6 +158,7 @@ src/Makefile
 src/lzma/Makefile
 src/lzma/C/Makefile
 src/lib/libzpaq/Makefile
+src/lib/libbz3/Makefile
 doc/Makefile
 man/Makefile
 ])
