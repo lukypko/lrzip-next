@@ -107,11 +107,11 @@ static void usage(void)
 	print_output("Compression Options:\n--------------------\n");
 	print_output("	--lzma			lzma compression (default)\n");
 	print_output("	-b, --bzip2		bzip2 compression\n");
+	print_output("	-B, --bzip3		bzip3 compression\n");
 	print_output("	-g, --gzip		gzip compression using zlib\n");
 	print_output("	-l, --lzo		lzo compression (ultra fast)\n");
 	print_output("	-n, --no-compress	no backend compression - prepare for other compressor\n");
 	print_output("	-z, --zpaq		zpaq compression (best, extreme compression, extremely slow)\n");
-	print_output("	-B, --bzip3		bzip3 compression\n");
 	print_output("	-L#, --level #		set lzma/bzip2/gzip compression level (1-9, default 7)\n");
 	print_output("	--fast			alias for -L1\n");
 	print_output("	--best			alias for -L9\n");
@@ -310,22 +310,22 @@ static struct option long_options[] = {
 	{"bzip3",	no_argument,	0,	'B'},
 	{"fast",	no_argument,	0,	'1'},
 	{"best",	no_argument,	0,	'9'},
-	{"lzma",       	no_argument,	0,	0},		/* 34 - begin long opt index */
-	{"dictsize",	required_argument,	0,	0},	/* 35 */
+	{"lzma",       	no_argument,	0,	0},		/* 35 - begin long opt index */
+	{"dictsize",	required_argument,	0,	0},
 	{"zpaqbs",	required_argument,	0,	0},
 	{"bzip3bs",	required_argument,	0,	0},
-	{"x86",		no_argument,	0,	0},		/* 38 */
-	{"arm",		no_argument,	0,	0},
+	{"x86",		no_argument,	0,	0},		/* 39 - begin filter start*/
+	{"arm",		no_argument,	0,	0},		/* 40 */
 	{"armt",	no_argument,	0,	0},
-	{"ppc",		no_argument,	0,	0},		/* 41 */
+	{"ppc",		no_argument,	0,	0},	
 	{"sparc",	no_argument,	0,	0},
 	{"ia64",	no_argument,	0,	0},
-	{"delta",	optional_argument,	0,	0},	/* 44 */
+	{"delta",	optional_argument,	0,	0},	/* 45 */
 	{0,	0,	0,	0},
 };
 
 /* constants for ease of maintenance in getopt loop */
-#define LONGSTART	34
+#define LONGSTART	35
 #define FILTERSTART	39
 
 static void set_stdout(struct rzip_control *control)
