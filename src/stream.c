@@ -171,9 +171,9 @@ static void setup_states(rzip_control * control) {
 	if(!states)
 		fatal("Failed to allocate memory for bzip3 states\n");
 	for (i = 0; i < control->threads + 1; i++) {
-		states[i] = bz3_new((1 << control->bzip3_bs) * ONE_MB);
+		states[i] = bz3_new(control->bzip3_block_size);
 		if(!states[i])
-			fatal("Failed to allocate %dMB bzip3 state #%d.\n", (1 << control->bzip3_bs), i);
+			fatal("Failed to allocate %'"PRIu32" bytes bzip3 state #%d.\n", control->bzip3_block_size, i);
 	}
 }
 
@@ -250,8 +250,8 @@ static int bzip3_compress_buf(rzip_control *control, struct compress_thread *cth
 	memcpy(c_buf, cthread->s_buf, cthread->s_len);
 
 	c_len = 0;
-	print_verbose("Starting bzip3 (bs=%d) backend...\n",
-		       control->bzip3_bs);
+	print_verbose("Starting bzip3: bs=%d - %'"PRIu32" bytes backend...\n",
+		       control->bzip3_bs, control->bzip3_block_size);
 
         bzip3_compress(control, c_buf, &c_len, cthread->s_len, current_thread);
 
@@ -1185,15 +1185,15 @@ retry_zpaq:
 				goto retry_zpaq;
 			}
 			if (control->zpaq_bs != save_bs)
-				print_verbose("ZPAQ Block Size reduced to %'d\n", control->zpaq_bs);
+				print_verbose("ZPAQ Block Size reduced to %d\n", control->zpaq_bs);
 		} else if(BZIP3_COMPRESS) {
 			/* compute max possible block size. NB: This code sucks but I don't want to refactor it. */
 			int save_bs = control->bzip3_bs;
-			int BZIP3BSMIN = 3;
+			u32 BZIP3BSMIN = (1 << 25);
 retry_bzip3:
 			do {
 				for (control->threads = save_threads; control->threads >= thread_limit; control->threads--) {
-					if (limit >= control->overhead * control->threads) {
+					if (limit >= control->overhead * control->threads / testbufs) {
 						overhead_set = true;
 						break;
 					}
@@ -1202,15 +1202,17 @@ retry_bzip3:
 					break;
 				else
 					control->bzip3_bs--;				// decrement block size
+					control->bzip3_block_size = BZIP3_BLOCK_SIZE_FROM_PROP(control->bzip3_bs);
+
 				setup_overhead(control);				// recompute overhead
-			} while (control->bzip3_bs > BZIP3BSMIN);				// block size loop
+			} while (control->bzip3_block_size > BZIP3BSMIN);				// block size loop
 			if (!overhead_set && thread_limit > 1) {			// try again and lower thread_limit
 				thread_limit--;
 				control->bzip3_bs = save_bs;				// restore block size
 				goto retry_bzip3;
 			}
 			if (control->bzip3_bs != save_bs)
-				print_verbose("BZIP3 Block Size reduced to %'d\n", control->bzip3_bs);
+				print_verbose("BZIP3 Block Size reduced to %d - %'"PRIu32"\n", control->bzip3_bs, control->bzip3_block_size);
 		}
 
 		if (control->threads != save_threads)
@@ -1256,8 +1258,8 @@ retest_malloc:
 		if (ZPAQ_COMPRESS && (limit/control->threads > 0x100000<<control->zpaq_bs))
 			// ZPAQ  buffer always larger than STREAM_BUFSIZE
 			stream_bufsize = round_up_page(control, (0x100000<<control->zpaq_bs)-0x1000);
-		else if (BZIP3_COMPRESS && (limit/control->threads > 0x100000<<control->bzip3_bs))
-			stream_bufsize = round_up_page(control, (0x100000<<control->bzip3_bs)-0x1000);
+		else if (BZIP3_COMPRESS && (limit/control->threads > control->bzip3_block_size))
+			stream_bufsize = round_up_page(control, control->bzip3_block_size-0x1000);
 		else if (LZMA_COMPRESS && limit/control->threads > STREAM_BUFSIZE)
 			// for smaller dictionary sizes, need MAX test to bring in larger buffer from limit
 			// limit = usable ram / 2

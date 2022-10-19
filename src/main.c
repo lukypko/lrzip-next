@@ -117,7 +117,7 @@ static void usage(void)
 	print_output("	--best			alias for -L9\n");
 	print_output("	--dictsize		Set lzma Dictionary Size for LZMA ds=0 to 40 expressed as 2<<11, 3<<11, 2<<12, 3<<12...2<<31-1\n");
 	print_output("	--zpaqbs		Set ZPAQ Block Size overriding defaults. 1-11, 2^zpaqbs * 1MB\n");
-	print_output("	--bzip3bs		Set bzip3 Block Size. 1-8, 2^bzip3bs * 1MB.\n");
+	print_output("	--bzip3bs		Set bzip3 Block Size. 0-8, 32MB to 511MB.\n");
 	print_output("    Filtering Options:\n");
 	print_output("	--x86			Use x86 filter (for all compression modes)\n");
 	print_output("	--arm			Use ARM filter (for all compression modes)\n");
@@ -236,8 +236,8 @@ static void show_summary(void)
 				print_verbose("ZPAQ Compression Level: %'d, ZPAQ initial Block Size: %'d\n",
 					       control->zpaq_level, control->zpaq_bs);
 			if (BZIP3_COMPRESS)
-				print_verbose("BZIP3 Compression Block Size: %'d\n",
-					       control->bzip3_bs);
+				print_verbose("BZIP3 Compression Block Size: %'"PRIu32"\n",
+					       control->bzip3_block_size);
 			if (FILTER_USED) {
 				print_output("Filter Used: %s",
 					((control->filter_flag == FILTER_FLAG_X86) ? "x86" :
@@ -639,8 +639,9 @@ int main(int argc, char *argv[])
 							if (*endptr)
 								fatal("Extra characters after block size: \'%s\'\n", endptr);
 							if (ds < 0 || ds > 8)
-								fatal("BZIP3 Block Size must be between 1 and 8\n");
+								fatal("BZIP3 Block Size must be between 0 and 8\n");
 							control->bzip3_bs = ds;
+							control->bzip3_block_size = BZIP3_BLOCK_SIZE_FROM_PROP(ds);
 						}
 						break;
 						/* Filtering */
