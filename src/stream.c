@@ -158,70 +158,11 @@ bool join_pthread(rzip_control *control, pthread_t th, void **thread_return)
 */
 static int lz4_compresses(rzip_control *control, uchar *s_buf, i64 s_len);
 
-/* BZIP3 COMPRESSION WRAPPER */
-static pthread_mutex_t bz3_statemutex = PTHREAD_MUTEX_INITIALIZER;
-static struct bz3_state ** states = NULL;
-static int * statequeue = NULL;
-
-static void setup_states(rzip_control * control) {
-	int i;
-	states = malloc(sizeof(struct bz3_state *) * (control->threads + 1));
-	statequeue = malloc(sizeof(int) * (control->threads + 1));
-	memset(statequeue, 0, sizeof(int) * (control->threads + 1));
-	if(!states)
-		fatal("Failed to allocate memory for bzip3 states\n");
-	for (i = 0; i < control->threads + 1; i++) {
-		states[i] = bz3_new(control->bzip3_block_size);
-		if(!states[i])
-			fatal("Failed to allocate %'"PRIu32" bytes bzip3 state #%d.\n", control->bzip3_block_size, i);
-	}
-}
-
-static struct bz3_state * lock_state(rzip_control * control) {
-	lock_mutex(control, &bz3_statemutex);
-	int i;
-	for (i = 0; i < control->threads + 1; i++) {
-		if (!statequeue[i]) {
-			statequeue[i] = 1;
-			unlock_mutex(control, &bz3_statemutex);
-			return states[i];
-		}
-	}
-	
-	fatal("internal error: out of thread states.");
-	return NULL;
-}
-
-static void unlock_state(rzip_control * control, struct bz3_state * state) {
-	lock_mutex(control, &bz3_statemutex);
-	int i;
-	for (i = 0; i < control->threads + 1; i++) {
-		if (states[i] == state) {
-			statequeue[i] = 0;
-			unlock_mutex(control, &bz3_statemutex);
-			return;
-		}
-	}
-
-	fatal("internal error: state not in list.");
-}
-
-static void bzip3_compress(rzip_control *control, uchar *c_buf, i64 *c_len, i64 s_len, int ct) {
-	if(!states) setup_states(control);
-	struct bz3_state * state = lock_state(control);
-	*c_len = bz3_encode_block(state, c_buf, s_len);
-	if(bz3_last_error(state) != BZ3_OK) { print_err("Failed to compress with bz3: %s\n", bz3_strerror(state)); return; }
-	unlock_state(control, state);
-}
-static void bzip3_decompress(rzip_control *control, uchar *s_buf, i64 *s_len, i64 c_len, int ct) {
-	if(!states) setup_states(control);
-	struct bz3_state * state = lock_state(control);
-	*s_len = bz3_decode_block(state, s_buf, c_len, *s_len);
-	if(bz3_last_error(state) != BZ3_OK) { print_err("Failed to decompress with bz3: %s\n", bz3_strerror(state)); return; }
-	unlock_state(control, state);
-}
-
+/* BZIP3 COMPRESSION WRAPPER REMOVED 
+ * Not needed because compression functions
+ * and data are already thread locked */
 /*
+
   ***** COMPRESSION FUNCTIONS *****
 
   ZPAQ, BZIP, GZIP, LZMA, LZO, BZIP3
@@ -235,6 +176,8 @@ static int bzip3_compress_buf(rzip_control *control, struct compress_thread *cth
 {
 	i64 c_len, c_size;
 	uchar *c_buf;
+
+	struct bz3_state *state;
 
 	if (LZ4_TEST) {
 		if (!lz4_compresses(control, cthread->s_buf, cthread->s_len))
@@ -253,7 +196,11 @@ static int bzip3_compress_buf(rzip_control *control, struct compress_thread *cth
 	print_verbose("Starting bzip3: bs=%d - %'"PRIu32" bytes backend...\n",
 		       control->bzip3_bs, control->bzip3_block_size);
 
-        bzip3_compress(control, c_buf, &c_len, cthread->s_len, current_thread);
+	state = bz3_new(control->bzip3_block_size);	// allocate bzip3 state
+	if (!state)
+		fatal("Failed to allocate %'"PRIu32" bytes bzip3 state.\n", control->bzip3_block_size);
+
+        c_len = bz3_encode_block(state, c_buf, cthread->s_len);
 
 	if (unlikely(c_len >= cthread->c_len)) {
 		print_maxverbose("Incompressible block\n");
@@ -266,6 +213,7 @@ static int bzip3_compress_buf(rzip_control *control, struct compress_thread *cth
 	dealloc(cthread->s_buf);
 	cthread->s_buf = c_buf;
 	cthread->c_type = CTYPE_BZIP3;
+	bz3_free(state);				// free bzip3 state
 	return 0;
 }
 
@@ -565,6 +513,8 @@ static int bzip3_decompress_buf(rzip_control *control __UNUSED__, struct uncomp_
 	uchar *c_buf;
 	int ret = 0;
 
+	struct bz3_state *state;
+
 	c_buf = ucthread->s_buf;
 	ucthread->s_buf = malloc(round_up_page(control, dlen));
 	if (unlikely(!ucthread->s_buf)) {
@@ -574,7 +524,11 @@ static int bzip3_decompress_buf(rzip_control *control __UNUSED__, struct uncomp_
 	}
 	memcpy(ucthread->s_buf, c_buf, ucthread->c_len);
 
-	bzip3_decompress(control, ucthread->s_buf, &dlen, ucthread->c_len, current_thread);
+	state = bz3_new(control->bzip3_block_size);
+
+	dlen = bz3_decode_block(state, ucthread->s_buf, ucthread->c_len, ucthread->u_len);
+	if (bz3_last_error(state) != BZ3_OK)
+		fatal("Failed to decompress with bz3 %s\n", bz3_strerror(state));
 
 	if (unlikely(dlen != ucthread->u_len)) {
 		print_err("Inconsistent length after decompression. Got %'"PRId64" bytes, expected %'"PRId64"\n", dlen, ucthread->u_len);
@@ -586,6 +540,7 @@ out:
 		dealloc(ucthread->s_buf);
 		ucthread->s_buf = c_buf;
 	}
+	bz3_free(state);
 	return ret;
 }
 
@@ -1079,12 +1034,6 @@ bool close_streamout_threads(rzip_control *control)
 	}
 	dealloc(cthreads);
 	dealloc(control->pthreads);
-	if(states != NULL) {
-		for(i = 0; i < control->threads; i++)
-			bz3_free(states[i]);
-		free(states);
-		free(statequeue);
-	}
 	return true;
 }
 
