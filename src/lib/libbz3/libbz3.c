@@ -156,14 +156,15 @@ static s32 lzp_encode_block(const u8 * RESTRICT in, const u8 * in_end, u8 * REST
     return out >= out_eob ? -1 : (s32)(out - outs);
 }
 
-static s32 lzp_decode_block(const u8 * RESTRICT in, const u8 * in_end, s32 * RESTRICT lut, u8 * RESTRICT out) {
+static s32 lzp_decode_block(const u8 * RESTRICT in, const u8 * in_end, s32 * RESTRICT lut, u8 * RESTRICT out,
+                            const u8 * out_end) {
     const u8 * outs = out;
 
     for (s32 i = 0; i < 4; ++i) *out++ = *in++;
 
     u32 ctx = ((u32)out[-1]) | (((u32)out[-2]) << 8) | (((u32)out[-3]) << 16) | (((u32)out[-4]) << 24);
 
-    while (in < in_end) {
+    while (in < in_end && out < out_end) {
         u32 idx = (ctx >> 15 ^ ctx ^ ctx >> 3) & ((s32)(1 << LZP_DICTIONARY) - 1);
         s32 val = lut[idx];
         lut[idx] = (s32)(out - outs);
@@ -172,14 +173,16 @@ static s32 lzp_decode_block(const u8 * RESTRICT in, const u8 * in_end, s32 * RES
             if (*in != 255) {
                 s32 len = LZP_MIN_MATCH;
                 while (1) {
+                    if (in == in_end) return -1;
                     len += *in;
                     if (*in++ != 254) break;
                 }
 
                 const u8 * ref = outs + val;
-                u8 * out_end = out + len;
+                u8 * oe = out + len;
+                if (oe > out_end) return -1;
 
-                while (out < out_end) *out++ = *ref++;
+                while (out < oe) *out++ = *ref++;
 
                 ctx = ((u32)out[-1]) | (((u32)out[-2]) << 8) | (((u32)out[-3]) << 16) | (((u32)out[-4]) << 24);
             } else {
@@ -202,12 +205,12 @@ static s32 lzp_compress(const u8 * RESTRICT in, u8 * RESTRICT out, s32 n, s32 * 
     return lzp_encode_block(in, in + n, out, out + n, lut);
 }
 
-static s32 lzp_decompress(const u8 * RESTRICT in, u8 * RESTRICT out, s32 n, s32 * RESTRICT lut) {
+static s32 lzp_decompress(const u8 * RESTRICT in, u8 * RESTRICT out, s32 n, s32 max, s32 * RESTRICT lut) {
     if (n < 4) return -1;
 
     memset(lut, 0, sizeof(s32) * (1 << LZP_DICTIONARY));
 
-    return lzp_decode_block(in, in + n, lut, out);
+    return lzp_decode_block(in, in + n, lut, out, out + max);
 }
 
 /* RLE code. Unlike RLE in other compressors, we collapse all runs if they yield a net gain
@@ -272,7 +275,7 @@ static void mrled(u8 * RESTRICT in, u8 * RESTRICT out, s32 outlen) {
             for (run = 0; (pc = in[ip++]) == 255; run += 255)
                 ;
             run += pc + 1;
-            for (; run > 0; --run) out[op++] = c;
+            for (; run > 0 && op < outlen; --run) out[op++] = c;
         } else
             out[op++] = c;
     }
@@ -455,6 +458,12 @@ struct bz3_state {
 
 BZIP3_API s8 bz3_last_error(struct bz3_state * state) { return state->last_error; }
 
+/* This function is not used in lrzip-next
+BZIP3_API const char * bz3_version(void) { return VERSION; }
+*/
+
+BZIP3_API size_t bz3_bound(size_t input_size) { return input_size + input_size / 50 + 32; }
+
 BZIP3_API const char * bz3_strerror(struct bz3_state * state) {
     switch (state->last_error) {
         case BZ3_OK:
@@ -489,7 +498,7 @@ BZIP3_API struct bz3_state * bz3_new(s32 block_size) {
 
     bz3_state->cm_state = malloc(sizeof(state));
 
-    bz3_state->swap_buffer = malloc(block_size + block_size / 50 + 32);
+    bz3_state->swap_buffer = malloc(bz3_bound(block_size));
     bz3_state->sais_array = malloc((block_size + 2) * sizeof(s32));
     memset(bz3_state->sais_array, 0, sizeof(s32) * (block_size + 2));
 
@@ -602,7 +611,7 @@ BZIP3_API s32 bz3_decode_block(struct bz3_state * state, u8 * buffer, s32 data_s
     u32 crc32 = read_neutral_s32(buffer);
     s32 bwt_idx = read_neutral_s32(buffer + 4);
 
-    if (data_size > state->block_size + state->block_size / 50 + 32 || data_size < 0) {
+    if (data_size > bz3_bound(state->block_size) || data_size < 0) {
         state->last_error = BZ3_ERR_MALFORMED_HEADER;
         return -1;
     }
@@ -633,13 +642,13 @@ BZIP3_API s32 bz3_decode_block(struct bz3_state * state, u8 * buffer, s32 data_s
 
     data_size -= p * 4 + 1;
 
-    if (((model & 2) && (lzp_size > state->block_size + state->block_size / 50 + 32 || lzp_size < 0)) ||
-        ((model & 4) && (rle_size > state->block_size + state->block_size / 50 + 32 || rle_size < 0))) {
+    if (((model & 2) && (lzp_size > bz3_bound(state->block_size) || lzp_size < 0)) ||
+        ((model & 4) && (rle_size > bz3_bound(state->block_size) || rle_size < 0))) {
         state->last_error = BZ3_ERR_MALFORMED_HEADER;
         return -1;
     }
 
-    if (orig_size > state->block_size + state->block_size / 50 + 32 || orig_size < 0) {
+    if (orig_size > bz3_bound(state->block_size) || orig_size < 0) {
         state->last_error = BZ3_ERR_MALFORMED_HEADER;
         return -1;
     }
@@ -678,7 +687,11 @@ BZIP3_API s32 bz3_decode_block(struct bz3_state * state, u8 * buffer, s32 data_s
 
     // Undo LZP
     if (model & 2) {
-        size_src = lzp_decompress(b1, b2, lzp_size, state->lzp_lut);
+        size_src = lzp_decompress(b1, b2, lzp_size, bz3_bound(state->block_size), state->lzp_lut);
+        if (size_src == -1) {
+            state->last_error = BZ3_ERR_CRC;
+            return -1;
+        }
         swap(b1, b2);
     }
 
@@ -690,7 +703,7 @@ BZIP3_API s32 bz3_decode_block(struct bz3_state * state, u8 * buffer, s32 data_s
 
     state->last_error = BZ3_OK;
 
-    if (size_src > state->block_size + state->block_size / 50 + 32 || size_src < 0) {
+    if (size_src > bz3_bound(state->block_size) || size_src < 0) {
         state->last_error = BZ3_ERR_MALFORMED_HEADER;
         return -1;
     }
@@ -713,15 +726,15 @@ BZIP3_API s32 bz3_decode_block(struct bz3_state * state, u8 * buffer, s32 data_s
 
 typedef struct {
     struct bz3_state * state;
-    uint8_t * buffer;
-    int32_t size;
+    u8 * buffer;
+    s32 size;
 } encode_thread_msg;
 
 typedef struct {
     struct bz3_state * state;
-    uint8_t * buffer;
-    int32_t size;
-    int32_t orig_size;
+    u8 * buffer;
+    s32 size;
+    s32 orig_size;
 } decode_thread_msg;
 
 static void * bz3_init_encode_thread(void * _msg) {
@@ -738,31 +751,150 @@ static void * bz3_init_decode_thread(void * _msg) {
     return NULL;  // unreachable
 }
 
-BZIP3_API void bz3_encode_blocks(struct bz3_state * states[], uint8_t * buffers[], int32_t sizes[], int32_t n) {
+BZIP3_API void bz3_encode_blocks(struct bz3_state * states[], u8 * buffers[], s32 sizes[], s32 n) {
     encode_thread_msg messages[n];
     pthread_t threads[n];
-    for (int32_t i = 0; i < n; i++) {
+    for (s32 i = 0; i < n; i++) {
         messages[i].state = states[i];
         messages[i].buffer = buffers[i];
         messages[i].size = sizes[i];
         pthread_create(&threads[i], NULL, bz3_init_encode_thread, &messages[i]);
     }
-    for (int32_t i = 0; i < n; i++) pthread_join(threads[i], NULL);
-    for (int32_t i = 0; i < n; i++) sizes[i] = messages[i].size;
+    for (s32 i = 0; i < n; i++) pthread_join(threads[i], NULL);
+    for (s32 i = 0; i < n; i++) sizes[i] = messages[i].size;
 }
 
-BZIP3_API void bz3_decode_blocks(struct bz3_state * states[], uint8_t * buffers[], int32_t sizes[],
-                                 int32_t orig_sizes[], int32_t n) {
+BZIP3_API void bz3_decode_blocks(struct bz3_state * states[], u8 * buffers[], s32 sizes[], s32 orig_sizes[], s32 n) {
     decode_thread_msg messages[n];
     pthread_t threads[n];
-    for (int32_t i = 0; i < n; i++) {
+    for (s32 i = 0; i < n; i++) {
         messages[i].state = states[i];
         messages[i].buffer = buffers[i];
         messages[i].size = sizes[i];
         messages[i].orig_size = orig_sizes[i];
         pthread_create(&threads[i], NULL, bz3_init_decode_thread, &messages[i]);
     }
-    for (int32_t i = 0; i < n; i++) pthread_join(threads[i], NULL);
+    for (s32 i = 0; i < n; i++) pthread_join(threads[i], NULL);
 }
 
 #endif
+
+/* High level API implementations. */
+
+BZIP3_API int bz3_compress(u32 block_size, const u8 * const in, u8 * out, size_t in_size, size_t * out_size) {
+    if (block_size > in_size) block_size = in_size + 16;
+    block_size = block_size <= KiB(65) ? KiB(65) : block_size;
+
+    struct bz3_state * state = bz3_new(block_size);
+    if (!state) return BZ3_ERR_INIT;
+
+    u8 * compression_buf = malloc(block_size);
+    if (!compression_buf) {
+        bz3_free(state);
+        return BZ3_ERR_INIT;
+    }
+
+    size_t buf_max = *out_size;
+    *out_size = 0;
+
+    u32 n_blocks = in_size / block_size;
+    if (in_size % block_size) n_blocks++;
+
+    if (buf_max < 13 || buf_max < bz3_bound(in_size)) {
+        bz3_free(state);
+        free(compression_buf);
+        return BZ3_ERR_DATA_TOO_BIG;
+    }
+
+    out[0] = 'B';
+    out[1] = 'Z';
+    out[2] = '3';
+    out[3] = 'v';
+    out[4] = '1';
+    write_neutral_s32(out + 5, block_size);
+    write_neutral_s32(out + 9, n_blocks);
+    *out_size += 13;
+
+    // Compress and write the blocks.
+    for (u32 i = 0; i < n_blocks; i++) {
+        s32 size = block_size;
+        if (i == n_blocks - 1) size = in_size % block_size;
+        memcpy(compression_buf, in, size);
+        s32 out_size_block = bz3_encode_block(state, compression_buf, size);
+        if (bz3_last_error(state) != BZ3_OK) {
+            s8 last_error = state->last_error;
+            bz3_free(state);
+            free(compression_buf);
+            return last_error;
+        }
+        memcpy(out + *out_size + 8, compression_buf, out_size_block);
+        write_neutral_s32(out + *out_size, out_size_block);
+        write_neutral_s32(out + *out_size + 4, size);
+        *out_size += out_size_block + 8;
+    }
+
+    bz3_free(state);
+    free(compression_buf);
+    return BZ3_OK;
+}
+
+BZIP3_API int bz3_decompress(const uint8_t * in, uint8_t * out, size_t in_size, size_t * out_size) {
+    if (in_size < 13) return BZ3_ERR_MALFORMED_HEADER;
+    if (in[0] != 'B' || in[1] != 'Z' || in[2] != '3' || in[3] != 'v' || in[4] != '1') {
+        return BZ3_ERR_MALFORMED_HEADER;
+    }
+    u32 block_size = read_neutral_s32(in + 5);
+    u32 n_blocks = read_neutral_s32(in + 9);
+    in_size -= 13;
+    in += 13;
+
+    struct bz3_state * state = bz3_new(block_size);
+    if (!state) return BZ3_ERR_INIT;
+
+    u8 * compression_buf = malloc(block_size);
+    if (!compression_buf) {
+        bz3_free(state);
+        return BZ3_ERR_INIT;
+    }
+
+    size_t buf_max = *out_size;
+    *out_size = 0;
+
+    for (u32 i = 0; i < n_blocks; i++) {
+        if (in_size < 8) {
+        malformed_header:
+            bz3_free(state);
+            free(compression_buf);
+            return BZ3_ERR_MALFORMED_HEADER;
+        }
+        s32 size = read_neutral_s32(in);
+        if (size < 0 || size > block_size) goto malformed_header;
+        if (in_size < size + 8) {
+            bz3_free(state);
+            free(compression_buf);
+            return BZ3_ERR_TRUNCATED_DATA;
+        }
+        s32 orig_size = read_neutral_s32(in + 4);
+        if (orig_size < 0) goto malformed_header;
+        if (buf_max < *out_size + orig_size) {
+            bz3_free(state);
+            free(compression_buf);
+            return BZ3_ERR_DATA_TOO_BIG;
+        }
+        memcpy(compression_buf, in + 8, size);
+        bz3_decode_block(state, compression_buf, size, orig_size);
+        if (bz3_last_error(state) != BZ3_OK) {
+            s8 last_error = state->last_error;
+            bz3_free(state);
+            free(compression_buf);
+            return last_error;
+        }
+        memcpy(out + *out_size, compression_buf, orig_size);
+        *out_size += orig_size;
+        in += size + 8;
+        in_size -= size + 8;
+    }
+
+    bz3_free(state);
+    return BZ3_OK;
+}
