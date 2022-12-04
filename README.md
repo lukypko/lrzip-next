@@ -5,7 +5,7 @@ lrzip-next - Long Range ZIP
 
 Tag v0.9.3
 
-**NEW bzip3 integration with -B option**
+**NEW bzip3 integration with -B option** (by Kamila Szewczyk)
 **Encrypted archives from any earlier version will not be compatible or readable.**
 **LRZIP Archives created with versions < 0.6 will no longer be supported.**
 
@@ -53,9 +53,6 @@ Many new changes, not in the main branch, including:
 (See original README for more historical info)
 
 ### Download and Build
-Note: This version, with BZIP3 support requires BZIP3 to be installed on host.\
-See [This github site](https://github.com/kspalaiologos/bzip3) to download and install\
-if your distro does not provide it.\
 
 `$ git clone https://github.com/pete4abw/lrzip-next`\
 or if you desire to also download the **lrzip-fe** front end\

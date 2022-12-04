@@ -158,11 +158,7 @@ bool join_pthread(rzip_control *control, pthread_t th, void **thread_return)
 */
 static int lz4_compresses(rzip_control *control, uchar *s_buf, i64 s_len);
 
-/* BZIP3 COMPRESSION WRAPPER REMOVED 
- * Not needed because compression functions
- * and data are already thread locked */
 /*
-
   ***** COMPRESSION FUNCTIONS *****
 
   ZPAQ, BZIP, GZIP, LZMA, LZO, BZIP3
