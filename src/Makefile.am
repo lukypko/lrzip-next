@@ -1,6 +1,7 @@
 MAINTAINERCLEANFILES = Makefile.in
 
-AM_CFLAGS = -I . -I @top_srcdir@ -I @top_srcdir@/src/include -I @top_srcdir@/src/lzma/include
+#AM_CFLAGS = -I . -I @top_srcdir@ -I @top_srcdir@/src/include -I @top_srcdir@/src/lzma/include
+AM_CFLAGS =  -I . -I @top_srcdir@ -I @top_srcdir@/src/include -I @top_srcdir@/src/lzma/include
 AM_CXXFLAGS = $(AM_CFLAGS)
 
 noinst_LTLIBRARIES = libtmplrzip_next.la
@@ -16,8 +17,27 @@ libtmplrzip_next_la_SOURCES = \
 	include/runzip.h \
 	include/stream.h \
 	include/util.h \
+	include/files.h \
+	include/decompress.h \
+	include/filesBufferCache.h \
+	include/linkedList.h \
+	include/iterator.h \
+	include/stack.h \
+	include/folderTraversal.h \
+	include/binarySearchTree.h \
+	include/iteratorTest.h \
+	include/binarySearchTreeTest.c \
 	lzma/include/LzmaDec.h \
-	lzma/include/LzmaLib.h
+	lzma/include/LzmaLib.h \
+	files/files.c \
+	files/decompress.c \
+	files/filesBufferCache.c \
+	files/linkedList.c \
+	files/iterator.c \
+	files/folderTraversal.c \
+	files/binarySearchTree.c \
+	files/stack.c \
+	files/iteratorTest.c
 
 
 libtmplrzip_next_la_LIBADD = lzma/C/liblzma.la	\
