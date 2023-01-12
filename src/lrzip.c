@@ -214,6 +214,9 @@ bool write_magic(rzip_control *control)
 	/* store comment length */
 	magic[19] = (char) control->comment_length;
 
+	// TODO: store an offset to start of a "files section", it is unknow now, so store any fake data
+
+
 	if (unlikely(fdout_seekto(control, 0)))
 		fatal("Failed to seek to BOF to write Magic Header\n");
 
@@ -1086,7 +1089,7 @@ next_chunk:
 		}
 		do {
 			i64 head_off;
-
+			// particular heads `last_head` should be increasing
 			if (unlikely(last_head && last_head <= second_last))
 				fatal("Invalid earlier last_head position, corrupt archive.\n");
 			second_last = last_head;
@@ -1311,7 +1314,7 @@ bool compress_file(rzip_control *control)
 	const char *tmp, *tmpinfile; 	/* we're just using this as a proxy for control->infile.
 					 * Spares a compiler warning
 					 */
-	int fd_in = -1, fd_out = -1, len = MAGIC_LEN + control->comment_length;
+	int /*fd_in = -1, */fd_out = -1, len = MAGIC_LEN + control->comment_length;
 	char *header;
 
 	header = calloc(len, 1);
@@ -1325,12 +1328,12 @@ bool compress_file(rzip_control *control)
 			return false;
 	}
 
-	if (!STDIN) {
-		fd_in = open(control->infile, O_RDONLY);
-		if (unlikely(fd_in == -1))
-			fatal("Failed to open %s\n", control->infile);
-	} else
-		fd_in = fileno(control->inFILE);
+//	if (!STDIN) {
+//		fd_in = open(control->infile, O_RDONLY);
+//		if (unlikely(fd_in == -1))
+//			fatal("Failed to open %s\n", control->infile);
+//	} else
+//		fd_in = fileno(control->inFILE);
 
 	if (!STDOUT) {
 		if (control->outname) {
@@ -1359,8 +1362,8 @@ bool compress_file(rzip_control *control)
 			// Not needed since printed at end of decompression
 		}
 
-		if (!strcmp(control->infile, control->outfile))
-			fatal("Input and Output files are the same. %s. Exiting\n",control->infile);
+//		if (!strcmp(control->infile, control->outfile))
+//			fatal("Input and Output files are the same. %s. Exiting\n",control->infile);
 
 		fd_out = open(control->outfile, O_RDWR | O_CREAT | O_EXCL, 0666);
 		if (FORCE_REPLACE && (-1 == fd_out) && (EEXIST == errno)) {
@@ -1375,10 +1378,10 @@ bool compress_file(rzip_control *control)
 			fatal("Failed to create %s\n", control->outfile);
 		}
 		control->fd_out = fd_out;
-		if (!STDIN) {
-			if (unlikely(!preserve_perms(control, fd_in, fd_out)))
-				goto error;
-		}
+//		if (!STDIN) {
+//			if (unlikely(!preserve_perms(control, fd_in, fd_out)))
+//				goto error;
+//		}
 	} else {
 		if (unlikely(!open_tmpoutbuf(control)))
 			goto error;
@@ -1388,7 +1391,7 @@ bool compress_file(rzip_control *control)
 	if (unlikely(!STDOUT && write(fd_out, header, len) != len))
 		fatal("Cannot write file header\n");
 
-	rzip_fd(control, fd_in, fd_out);
+	rzip_fd(control, fd_out);
 
 	/* need to write magic after compression for expected size */
 	if (!STDOUT) {
@@ -1399,16 +1402,16 @@ bool compress_file(rzip_control *control)
 	if (ENCRYPT)
 		release_hashes(control);
 
-	if (unlikely(!STDIN && !STDOUT && !preserve_times(control, fd_in))) {
-		fatal("Failed to preserve times on output file\n");
-		goto error;
-	}
+//	if (unlikely(!STDIN && !STDOUT && !preserve_times(control, fd_in))) {
+//		fatal("Failed to preserve times on output file\n");
+//		goto error;
+//	}
 
-	if (unlikely(close(fd_in))) {
-		fatal("Failed to close fd_in\n");
-		fd_in = -1;
-		goto error;
-	}
+//	if (unlikely(close(fd_in))) {
+//		fatal("Failed to close fd_in\n");
+//		fd_in = -1;
+//		goto error;
+//	}
 	if (unlikely(!STDOUT && close(fd_out)))
 		fatal("Failed to close fd_out\n");
 	if (TMP_OUTBUF)
@@ -1425,8 +1428,8 @@ bool compress_file(rzip_control *control)
 	return true;
 error:
 	dealloc(header);
-	if (!STDIN && (fd_in > 0))
-		close(fd_in);
+//	if (!STDIN && (fd_in > 0))
+//		close(fd_in);
 	if ((!STDOUT) && (fd_out > 0))
 		close(fd_out);
 	return false;

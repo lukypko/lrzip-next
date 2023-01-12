@@ -1,23 +1,23 @@
 /*
-   Copyright (C) 2006-2016,2018 Con Kolivas
-   Copyright (C) 1998 Andrew Tridgell
+ Copyright (C) 2006-2016,2018 Con Kolivas
+ Copyright (C) 1998 Andrew Tridgell
 
-   Modified to use flat hash, memory limit and variable hash culling
-   by Rusty Russell copyright (C) 2003.
+ Modified to use flat hash, memory limit and variable hash culling
+ by Rusty Russell copyright (C) 2003.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
-   (at your option) any later version.
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program. If not, see <http://www.gnu.org/licenses/>.
-*/
+ You should have received a copy of the GNU General Public License
+ along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 /* rzip compression algorithm */
 
 #ifdef HAVE_CONFIG_H
@@ -55,6 +55,11 @@
 #include "util.h"
 #include "lrzip_core.h"
 
+//#include "files/c1.h"
+#include "files.h"
+#include "filesBufferCache.h"
+
+
 #ifndef MAP_ANONYMOUS
 # define MAP_ANONYMOUS MAP_ANON
 #endif
@@ -82,146 +87,147 @@ static struct level {
 	unsigned long mb_used;
 	unsigned initial_freq;
 	unsigned max_chain_len;
-} levels[10] = {
-	{ 1, 4, 1 },
-	{ 2, 4, 2 },
-	{ 4, 4, 2 },
-	{ 8, 4, 2 },
-	{ 16, 4, 3 },
-	{ 32, 4, 4 },
-	{ 32, 2, 6 },
-	{ 64, 1, 16 }, /* More MB makes sense, but need bigger test files */
-	{ 64, 1, 32 },
-	{ 64, 1, 128 },
-};
+} levels[10] = { { 1, 4, 1 }, { 2, 4, 2 }, { 4, 4, 2 }, { 8, 4, 2 },
+		{ 16, 4, 3 }, { 32, 4, 4 }, { 32, 2, 6 }, { 64, 1, 16 }, /* More MB makes sense, but need bigger test files */
+		{ 64, 1, 32 }, { 64, 1, 128 }, };
 
-static void remap_low_sb(rzip_control *control, struct sliding_buffer *sb)
-{
-	i64 new_offset;
 
-	new_offset = sb->offset_search;
-	round_to_page(&new_offset);
-	print_maxverbose("Sliding main buffer to offset %'"PRId64"\n", new_offset);
-	if (unlikely(munmap(sb->buf_low, sb->size_low)))
-		fatal("Failed to munmap in remap_low_sb\n");
-	if (new_offset + sb->size_low > sb->orig_size)
-		sb->size_low = sb->orig_size - new_offset;
-	sb->offset_low = new_offset;
-	sb->buf_low = (uchar *)mmap(sb->buf_low, sb->size_low, PROT_READ, MAP_SHARED, sb->fd, sb->orig_offset + sb->offset_low);
-	if (unlikely(sb->buf_low == MAP_FAILED))
-		fatal("Failed to re mmap in remap_low_sb\n");
-}
+//static void remap_low_sb(rzip_control *control, struct sliding_buffer *sb) {
+//	i64 new_offset;
+//
+//	new_offset = sb->offset_search;
+//	round_to_page(&new_offset);
+//	print_maxverbose("Sliding main buffer to offset %'"PRId64"\n", new_offset);
+//	if (unlikely(munmap(sb->buf_low, sb->size_low)))
+//		fatal("Failed to munmap in remap_low_sb\n");
+//	if (new_offset + sb->size_low > sb->orig_size)
+//		sb->size_low = sb->orig_size - new_offset;
+//	sb->offset_low = new_offset;
+//	sb->buf_low = (uchar*) mmap2(control, sb->buf_low, sb->size_low, PROT_READ,
+//	MAP_SHARED, sb->orig_offset + sb->offset_low);
+//	if (unlikely(sb->buf_low == MAP_FAILED))
+//		fatal("Failed to re mmap in remap_low_sb\n");
+//}
 
-static inline void remap_high_sb(rzip_control *control, struct sliding_buffer *sb, i64 p)
-{
-	if (unlikely(munmap(sb->buf_high, sb->size_high)))
-		fatal("Failed to munmap in remap_high_sb\n");
-	sb->size_high = sb->high_length; /* In case we shrunk it when we hit the end of the file */
-	sb->offset_high = p;
-	/* Make sure offset is rounded to page size of total offset */
-	sb->offset_high -= (sb->offset_high + sb->orig_offset) % control->page_size;
-	if (unlikely(sb->offset_high + sb->size_high > sb->orig_size))
-		sb->size_high = sb->orig_size - sb->offset_high;
-	sb->buf_high = (uchar *)mmap(sb->buf_high, sb->size_high, PROT_READ, MAP_SHARED, sb->fd, sb->orig_offset + sb->offset_high);
-	if (unlikely(sb->buf_high == MAP_FAILED))
-		fatal("Failed to re mmap in remap_high_sb\n");
-}
+//static inline void remap_high_sb(rzip_control *control,
+//		struct sliding_buffer *sb, i64 p) {
+//	if (unlikely(munmap(sb->buf_high, sb->size_high)))
+//		fatal("Failed to munmap in remap_high_sb\n");
+//	sb->size_high = sb->high_length; /* In case we shrunk it when we hit the end of the file */
+//	sb->offset_high = p;
+//	/* Make sure offset is rounded to page size of total offset */
+//	sb->offset_high -= (sb->offset_high + sb->orig_offset) % control->page_size;
+//	if (unlikely(sb->offset_high + sb->size_high > sb->orig_size))
+//		sb->size_high = sb->orig_size - sb->offset_high;
+//	sb->buf_high = (uchar*) mmap2(control, sb->buf_high, sb->size_high,
+//	PROT_READ, MAP_SHARED, /*sb->fd,*/sb->orig_offset + sb->offset_high);
+//	if (unlikely(sb->buf_high == MAP_FAILED))
+//		fatal("Failed to re mmap in remap_high_sb\n");
+//}
 
-/* We use a "sliding mmap" to effectively read more than we can fit into the
- * compression window. This is done by using a maximally sized lower mmap at
- * the beginning of the block which slides up once the hash search moves beyond
- * it, and a 64k mmap block that slides up and down as is required for any
- * offsets outside the range of the lower one. This is much slower than mmap
- * but makes it possible to have unlimited sized compression windows.
- * We use a pointer to the function we actually want to use and only enable
- * the sliding mmap version if we need sliding mmap functionality as this is
- * a hot function during the rzip phase */
-static uchar *sliding_get_sb(rzip_control *control, i64 p)
-{
-	struct sliding_buffer *sb = &control->sb;
-	i64 sbo;
+///*
+// * return address of a byte at the offset of `p`
+// * p - address (offset from the start) of input file which we want to read/get
+// *
+// * We use a "sliding mmap" to effectively read more than we can fit into the
+// * compression window. This is done by using a maximally sized lower mmap at
+// * the beginning of the block which slides up once the hash search moves beyond
+// * it, and a 64k mmap block that slides up and down as is required for any
+// * offsets outside the range of the lower one. This is much slower than mmap
+// * but makes it possible to have unlimited sized compression windows.
+// * We use a pointer to the function we actually want to use and only enable
+// * the sliding mmap version if we need sliding mmap functionality as this is
+// * a hot function during the rzip phase
+// **/
+//static uchar* sliding_get_sb(rzip_control *control, i64 p) {
+//	struct sliding_buffer *sb = &control->sb;
+//	i64 sbo;
+//
+//	sbo = sb->offset_low;
+//	if (p >= sbo && p < sbo + sb->size_low)
+//		return (sb->buf_low + p - sbo);
+//	sbo = sb->offset_high;
+//	if (p >= sbo && p < (sbo + sb->size_high))
+//		return (sb->buf_high + (p - sbo));
+//	/* p is not within the low or high buffer range */
+//	remap_high_sb(control, &control->sb, p);
+//	/* Use sb->offset_high directly since it will have changed */
+//	return (sb->buf_high + (p - sb->offset_high));
+//}
 
-	sbo = sb->offset_low;
-	if (p >= sbo && p < sbo + sb->size_low)
-		return (sb->buf_low + p - sbo);
-	sbo = sb->offset_high;
-	if (p >= sbo && p < (sbo + sb->size_high))
-		return (sb->buf_high + (p - sbo));
-	/* p is not within the low or high buffer range */
-	remap_high_sb(control, &control->sb, p);
-	/* Use sb->offset_high directly since it will have changed */
-	return (sb->buf_high + (p - sb->offset_high));
-}
-
-/* The length of continous range of the sliding buffer,
- * starting from the offset P.
- */
-static inline i64 sliding_get_sb_range(rzip_control *control, i64 p)
-{
-	struct sliding_buffer *sb = &control->sb;
-	i64 sbo, sbs;
-
-	sbo = sb->offset_low;
-	sbs = sb->size_low;
-	if (p >= sbo && p < sbo + sbs)
-		return (sbs - (p - sbo));
-	sbo = sb->offset_high;
-	sbs = sb->size_high;
-	if (likely(p >= sbo && p < (sbo + sbs)))
-		return (sbs - (p - sbo));
-
-	fatal("sliding_get_sb_range: the pointer is out of range\n");
-}
+///* The length of continous range of the sliding buffer,
+// * starting from the offset P.
+// */
+//static inline i64 sliding_get_sb_range(rzip_control *control, i64 p) {
+//	struct sliding_buffer *sb = &control->sb;
+//	i64 sbo, sbs;
+//
+//	// check whether offset `p` is in a range of lower buffer
+//	sbo = sb->offset_low;
+//	sbs = sb->size_low;
+//	if (p >= sbo && p < sbo + sbs)
+//		return (sbs - (p - sbo));
+//
+//	// check whether offset `p` is in a range of higher buffer
+//	sbo = sb->offset_high;
+//	sbs = sb->size_high;
+//	if (likely(p >= sbo && p < (sbo + sbs)))
+//		return (sbs - (p - sbo));
+//
+//	fatal("sliding_get_sb_range: the pointer is out of range\n");
+//}
 
 /* Since the sliding get_sb only allows us to access one byte at a time, we
  * do the same as we did with get_sb with the memcpy since one memcpy is much
- * faster than numerous memcpys 1 byte at a time */
-static void single_mcpy(rzip_control *control, unsigned char *buf, i64 offset, i64 len)
-{
-	memcpy(buf, control->sb.buf_low + offset, len);
-}
-
-static void sliding_mcpy(rzip_control *control, unsigned char *buf, i64 offset, i64 len)
-{
-	i64 n = 0;
-
-	while (n < len) {
-		uchar *srcbuf = sliding_get_sb(control, offset + n);
-		i64 m = MIN(sliding_get_sb_range(control, offset + n), len - n);
-
-		memcpy(buf + n, srcbuf, m);
-		n += m;
-	}
-}
-
+ * faster than numerous memcpys 1 byte at a time
+ *
+ * Read input file's byte range of (`offset` and `length`) to a buffer `buf`.
+ * It is using when we have a whole input file loaded into a memory,
+ * so we are not using a sliding window.
+ */
+//static void single_mcpy(rzip_control *control, unsigned char *buf, i64 offset,
+//		i64 len) {
+//	memcpy(buf, control->sb.buf_low + offset, len);
+//}
+///**
+// * Read input file's byte range of (`offset` and `length`) to a buffer `buf`.
+// * It is using when we are using a sliding window.
+// */
+//static void sliding_mcpy(rzip_control *control, unsigned char *buf, i64 offset,
+//		i64 len) {
+//	i64 n = 0;
+//
+//	while (n < len) {
+//		uchar *srcbuf = sliding_get_sb(control, offset + n);
+//		i64 m = MIN(sliding_get_sb_range(control, offset + n), len - n);
+//
+//		memcpy(buf + n, srcbuf, m);
+//		n += m;
+//	}
+//}
 /* All put_u8/u32/vchars go to stream 0 */
-static inline void put_u8(rzip_control *control, void *ss, uchar b)
-{
+static inline void put_u8(rzip_control *control, void *ss, uchar b) {
 	write_stream(control, ss, 0, &b, 1);
 }
 
-static inline void put_u32(rzip_control *control, void *ss, uint32_t s)
-{
+static inline void put_u32(rzip_control *control, void *ss, uint32_t s) {
 	s = htole32(s);
-	write_stream(control, ss, 0, (uchar *)&s, 4);
+	write_stream(control, ss, 0, (uchar*) &s, 4);
 }
 
 /* Put a variable length of bytes dependant on how big the chunk is */
-static void put_vchars(rzip_control *control, void *ss, i64 s, i64 length)
-{
+static void put_vchars(rzip_control *control, void *ss, i64 s, i64 length) {
 	s = htole64(s);
-	write_stream(control, ss, 0, (uchar *)&s, length);
+	write_stream(control, ss, 0, (uchar*) &s, length);
 }
 
-static void put_header(rzip_control *control, void *ss, uchar head, i64 len)
-{
+static void put_header(rzip_control *control, void *ss, uchar head, i64 len) {
 	put_u8(control, ss, head);
 	put_vchars(control, ss, len, 2);
 }
 
 static inline void put_match(rzip_control *control, struct rzip_state *st,
-			     i64 p, i64 offset, i64 len)
-{
+		i64 p, i64 offset, i64 len) {
 	do {
 		i64 ofs;
 		i64 n = len;
@@ -241,14 +247,14 @@ static inline void put_match(rzip_control *control, struct rzip_state *st,
 
 /* write some data to a stream mmap encoded. Return -1 on failure */
 static inline void write_sbstream(rzip_control *control, void *ss, int stream,
-				 i64 p, i64 len)
-{
+		i64 p, i64 len) {
 	struct stream_info *sinfo = ss;
 
 	while (len) {
 		i64 n = MIN(sinfo->bufsize - sinfo->s[stream].buflen, len);
 
-		control->do_mcpy(control, sinfo->s[stream].buf + sinfo->s[stream].buflen, p, n);
+		control->do_mcpy(control->rzip_files,
+				sinfo->s[stream].buf + sinfo->s[stream].buflen, p, n);
 
 		sinfo->s[stream].buflen += n;
 		p += n;
@@ -259,8 +265,8 @@ static inline void write_sbstream(rzip_control *control, void *ss, int stream,
 	}
 }
 
-static void put_literal(rzip_control *control, struct rzip_state *st, i64 last, i64 p)
-{
+static void put_literal(rzip_control *control, struct rzip_state *st, i64 last,
+		i64 p) {
 	do {
 		i64 len = p - last;
 
@@ -279,24 +285,20 @@ static void put_literal(rzip_control *control, struct rzip_state *st, i64 last, 
 }
 
 /* Could give false positive on offset 0.  Who cares. */
-static inline bool empty_hash(struct hash_entry *he)
-{
+static inline bool empty_hash(struct hash_entry *he) {
 	return !(he->offset | he->t);
 }
 
-static i64 primary_hash(struct rzip_state *st, tag t)
-{
+static i64 primary_hash(struct rzip_state *st, tag t) {
 	return t & ((1 << st->hash_bits) - 1);
 }
 
-static inline tag increase_mask(tag tag_mask)
-{
+static inline tag increase_mask(tag tag_mask) {
 	/* Get more precise. */
 	return (tag_mask << 1) | 1;
 }
 
-static inline bool minimum_bitness(struct rzip_state *st, tag t)
-{
+static inline bool minimum_bitness(struct rzip_state *st, tag t) {
 	tag better_than_min = increase_mask(st->minimum_tag_mask);
 
 	if ((t & better_than_min) != better_than_min)
@@ -306,17 +308,15 @@ static inline bool minimum_bitness(struct rzip_state *st, tag t)
 
 /* Is a going to be cleaned before b?  ie. does a have fewer low bits
  * set than b? */
-static inline bool lesser_bitness(tag a, tag b)
-{
+static inline bool lesser_bitness(tag a, tag b) {
 	a ^= 0xffffffffffffffff;
 	b ^= 0xffffffffffffffff;
 	return (ffsll(a) < ffsll(b));
 }
 
 /* If hash bucket is taken, we spill into next bucket(s).  Secondary hashing
-   works better in theory, but modern caches make this 20% faster. */
-static void insert_hash(struct rzip_state *st, tag t, i64 offset)
-{
+ works better in theory, but modern caches make this 20% faster. */
+static void insert_hash(struct rzip_state *st, tag t, i64 offset) {
 	i64 h, victim_h = 0, round = 0;
 	/* If we need to kill one, this will be it. */
 	static i64 victim_round = 0;
@@ -326,23 +326,22 @@ static void insert_hash(struct rzip_state *st, tag t, i64 offset)
 	he = &st->hash_table[h];
 	while (!empty_hash(he)) {
 		/* If this due for cleaning anyway, just replace it:
-		   rehashing might move it behind tag_clean_ptr. */
+		 rehashing might move it behind tag_clean_ptr. */
 		if (minimum_bitness(st, he->t)) {
 			st->hash_count--;
 			break;
 		}
 		/* If we are better than current occupant, we can't
-		   jump over it: it will be cleaned before us, and
-		   noone would then find us in the hash table.  Rehash
-		   it, then take its place. */
+		 jump over it: it will be cleaned before us, and
+		 noone would then find us in the hash table.  Rehash
+		 it, then take its place. */
 		if (lesser_bitness(he->t, t)) {
-			insert_hash(st, he->t,
-				    he->offset);
+			insert_hash(st, he->t, he->offset);
 			break;
 		}
 
 		/* If we have lots of identical patterns, we end up
-		   with lots of the same hash number.  Discard random. */
+		 with lots of the same hash number.  Discard random. */
 		if (he->t == t) {
 			if (round == victim_round)
 				victim_h = h;
@@ -367,16 +366,16 @@ static void insert_hash(struct rzip_state *st, tag t, i64 offset)
 }
 
 /* Eliminate one hash entry with minimum number of lower bits set.
-   Returns tag requirement for any new entries. */
-static inline tag clean_one_from_hash(rzip_control *control, struct rzip_state *st)
-{
+ Returns tag requirement for any new entries. */
+static inline tag clean_one_from_hash(rzip_control *control,
+		struct rzip_state *st) {
 	struct hash_entry *he;
 	tag better_than_min;
 
-again:
-	better_than_min = increase_mask(st->minimum_tag_mask);
+	again: better_than_min = increase_mask(st->minimum_tag_mask);
 	if (!st->tag_clean_ptr)
-		print_maxverbose("Starting sweep for mask %'u\n", (unsigned int)st->minimum_tag_mask);
+		print_maxverbose("Starting sweep for mask %'u\n",
+				(unsigned int )st->minimum_tag_mask);
 
 	for (; st->tag_clean_ptr < (1U << st->hash_bits); st->tag_clean_ptr++) {
 		he = &st->hash_table[st->tag_clean_ptr];
@@ -396,63 +395,224 @@ again:
 	goto again;
 }
 
-static void single_next_tag(rzip_control *control, struct rzip_state *st, i64 p, tag *t)
-{
+//static void single_next_tag(rzip_control *control, struct rzip_state *st, i64 p,
+//		tag *t) {
+//	uchar u;
+//
+//	u = control->sb.buf_low[p - 1];
+//	*t ^= st->hash_index[u];
+//	u = control->sb.buf_low[p + MINIMUM_MATCH - 1];
+//	*t ^= st->hash_index[u];
+//}
+
+//static void sliding_next_tag(rzip_control *control, struct rzip_state *st,
+//		i64 p, tag *t) {
+//	uchar u;
+//
+////	u = sliding_get_sb(control, p - 1);
+//	u = fileCache_getByte(control, p - 1);
+//	*t ^= st->hash_index[u];
+////	u = sliding_get_sb(control, p + MINIMUM_MATCH - 1);
+//	u = fileCache_getByte(control, p + MINIMUM_MATCH - 1);
+//	*t ^= st->hash_index[u];
+//}
+
+static i64 sliding_next_tag2_count=0;
+static void sliding_next_tag2(rzip_control *control, struct rzip_state *st,
+		i64 p, tag *t) {
 	uchar u;
 
-	u = control->sb.buf_low[p - 1];
+	sliding_next_tag2_count++;
+
+	//	u = sliding_get_sb(control, p - 1);
+	u = fileCache_getByte(control->rzip_files, p - 1);
 	*t ^= st->hash_index[u];
-	u = control->sb.buf_low[p + MINIMUM_MATCH - 1];
+
+//	u = sliding_get_sb(control, p + MINIMUM_MATCH - 1);
+	u = fileCache_getByte(control->rzip_files, p + MINIMUM_MATCH - 1);
 	*t ^= st->hash_index[u];
 }
 
-static void sliding_next_tag(rzip_control *control, struct rzip_state *st, i64 p, tag *t)
-{
-	uchar *u;
 
-	u = sliding_get_sb(control, p - 1);
-	*t ^= st->hash_index[*u];
-	u = sliding_get_sb(control, p + MINIMUM_MATCH - 1);
-	*t ^= st->hash_index[*u];
+static void sliding_next_tag3(rzip_control *control, struct rzip_state *st,
+		i64 p, tag *t) {
+	uchar u;
+
+	sliding_next_tag2_count++;
+
+	struct rzip_files_buffer *buffer = control->rzip_files->lowBuffer;
+
+	//	u = sliding_get_sb(control, p - 1);
+//	u = fileCache_getByte(control->rzip_files, p - 1);
+	u = files_getDirectBufferByte(buffer, p-1);
+	*t ^= st->hash_index[u];
+
+//	u = sliding_get_sb(control, p + MINIMUM_MATCH - 1);
+	//u = fileCache_getByte(control->rzip_files, p + MINIMUM_MATCH - 1);
+	u = files_getDirectBufferByte(buffer, p + MINIMUM_MATCH - 1);
+	*t ^= st->hash_index[u];
 }
 
-static tag single_full_tag(rzip_control *control, struct rzip_state *st, i64 p)
-{
+
+//static tag single_full_tag(rzip_control *control, struct rzip_state *st, i64 p) {
+//	tag ret = 0;
+//	int i;
+//	uchar u;
+//
+//	for (i = 0; i < MINIMUM_MATCH; i++) {
+//		u = control->sb.buf_low[p + i];
+//		ret ^= st->hash_index[u];
+//	}
+//	return ret;
+//}
+
+//static tag sliding_full_tag(rzip_control *control, struct rzip_state *st, i64 p) {
+//	tag ret = 0;
+//	int i;
+//	uchar *u;
+//
+//	for (i = 0; i < MINIMUM_MATCH; i++) {
+//		u = sliding_get_sb(control, p + i);
+//		ret ^= st->hash_index[*u];
+//	}
+//	return ret;
+//}
+static i64 sliding_full_tag2_count=0;
+static tag sliding_full_tag2(rzip_control *control, struct rzip_state *st,
+		i64 p) {
 	tag ret = 0;
 	int i;
 	uchar u;
 
+	sliding_full_tag2_count++;
+
+
 	for (i = 0; i < MINIMUM_MATCH; i++) {
-		u = control->sb.buf_low[p + i];
+		u = fileCache_getByte(control->rzip_files, p + i);
+//		u = sliding_get_sb(control, p + i);
 		ret ^= st->hash_index[u];
 	}
 	return ret;
 }
 
-static tag sliding_full_tag(rzip_control *control, struct rzip_state *st, i64 p)
-{
+
+static tag sliding_full_tag3(rzip_control *control, struct rzip_state *st,
+		i64 p) {
 	tag ret = 0;
 	int i;
-	uchar *u;
+	uchar u;
 
-	for (i = 0; i < MINIMUM_MATCH; i++) {
-		u = sliding_get_sb(control, p + i);
-		ret ^= st->hash_index[*u];
+	sliding_full_tag2_count++;
+//	for (i = 0; i < MINIMUM_MATCH; i++) {
+	while(i < MINIMUM_MATCH) {
+		struct rzip_files_buffer *buffer = fileCache_remapBuffer(control->rzip_files,
+				p + i);
+		int64_t availableBuffer = files_min(buffer->end - p, MINIMUM_MATCH - i);
+		for (; availableBuffer > 0; availableBuffer--) {
+
+			u = files_getDirectBufferByte(buffer, p + i);
+			ret ^= st->hash_index[u];
+			i++;
+		}
 	}
+
 	return ret;
 }
 
-static i64
-single_match_len(rzip_control *control, struct rzip_state *st, i64 p0, i64 op,
-		 i64 end, i64 *rev)
-{
+//static i64 single_match_len(rzip_control *control, struct rzip_state *st,
+//		i64 p0, i64 op, i64 end, i64 *rev) {
+//	i64 p, len;
+//
+//	if (op >= p0)
+//		return 0;
+//
+//	p = p0;
+//	while (p < end && control->sb.buf_low[p] == control->sb.buf_low[op]) {
+//		p++;
+//		op++;
+//	}
+//	len = p - p0;
+//	p = p0;
+//	op -= len;
+//
+//	end = MAX(0, st->last_match);
+//
+//	while (p > end && op > 0
+//			&& control->sb.buf_low[op - 1] == control->sb.buf_low[p - 1]) {
+//		op--;
+//		p--;
+//	}
+//
+//	len += *rev = p0 - p;
+//	if (len < MINIMUM_MATCH)
+//		return 0;
+//
+//	return len;
+//}
+/**
+ * p0 - offset of range1
+ * op - offset of range2
+ * end - end of range1
+ *
+ * range2 must be before range1 (op<p0)
+ */
+//static i64 sliding_match_len(rzip_control *control, struct rzip_state *st,
+//		i64 p0, i64 op, i64 end, i64 *rev) {
+//	i64 p, len;
+//
+//	if (op >= p0)
+//		return 0;
+//
+//	p = p0;
+//	while (p < end
+//			&& *sliding_get_sb(control, p) == *sliding_get_sb(control, op)) {
+//		p++;
+//		op++;
+//	}
+//	len = p - p0;
+//	p = p0;
+//	op -= len;
+//
+//	end = MAX(0, st->last_match);
+//
+//	while (p > end && op > 0
+//			&& *sliding_get_sb(control, op - 1)
+//					== *sliding_get_sb(control, p - 1)) {
+//		op--;
+//		p--;
+//	}
+//
+//	len += *rev = p0 - p;
+//	if (len < MINIMUM_MATCH)
+//		return 0;
+//
+//	return len;
+//}
+
+
+static i64 sliding_match_len2_count=0;
+
+/**
+ * p0 - offset of range1
+ * op - offset of range2
+ * end - end of range1
+ *
+ * range2 must be before range1 (op<p0)
+ */
+static i64 sliding_match_len2(rzip_control *control, struct rzip_state *st,
+		i64 p0, i64 op, i64 end, i64 *rev) {
 	i64 p, len;
+
+	sliding_match_len2_count++;
 
 	if (op >= p0)
 		return 0;
 
 	p = p0;
-	while (p < end && control->sb.buf_low[p] == control->sb.buf_low[op]) {
+//	while (p < end
+//			&& *sliding_get_sb(control, p) == *sliding_get_sb(control, op)) {
+	while (p < end
+			&& fileCache_getByte(control->rzip_files, p) == fileCache_getByte(control->rzip_files, op)) {
 		p++;
 		op++;
 	}
@@ -462,7 +622,9 @@ single_match_len(rzip_control *control, struct rzip_state *st, i64 p0, i64 op,
 
 	end = MAX(0, st->last_match);
 
-	while (p > end && op > 0 && control->sb.buf_low[op - 1] == control->sb.buf_low[p - 1]) {
+	while (p > end && op > 0
+			&& fileCache_getByte(control->rzip_files, op - 1)
+					== fileCache_getByte(control->rzip_files, p - 1)) {
 		op--;
 		p--;
 	}
@@ -474,17 +636,38 @@ single_match_len(rzip_control *control, struct rzip_state *st, i64 p0, i64 op,
 	return len;
 }
 
-static i64
-sliding_match_len(rzip_control *control, struct rzip_state *st, i64 p0, i64 op,
-		  i64 end, i64 *rev)
-{
+/**
+ * p0 - offset of range1
+ * op - offset of range2
+ * end - end of range1
+ *
+ * range2 must be before range1 (op<p0)
+ */
+static i64 sliding_match_len3(rzip_control *control, struct rzip_state *st,
+		i64 p0, i64 op, i64 end, i64 *rev) {
 	i64 p, len;
+
+	sliding_match_len2_count++;
 
 	if (op >= p0)
 		return 0;
 
+
+//	struct rzip_files_buffer *buffer = fileCache_remapBuffer(rzip_files, sourceAddr);
+//
+//	int64_t start = sourceAddr - buffer->offset;
+//	int64_t availableBuffer = files_min(buffer->end - sourceAddr, len - i);
+//
+//	memcpy(destinationBuffer + i, buffer->buffer + start, availableBuffer);
+//	i += availableBuffer;
+
+	struct rzip_files_buffer *buffer = fileCache_remapBuffer(control->rzip_files, p0);
+
 	p = p0;
-	while (p < end && *sliding_get_sb(control, p) == *sliding_get_sb(control, op)) {
+//	while (p < end
+//			&& *sliding_get_sb(control, p) == *sliding_get_sb(control, op)) {
+	while (p < end
+			&& files_getDirectBufferByte(buffer, p) == files_getDirectBufferByte(buffer, op)) {
 		p++;
 		op++;
 	}
@@ -494,7 +677,9 @@ sliding_match_len(rzip_control *control, struct rzip_state *st, i64 p0, i64 op,
 
 	end = MAX(0, st->last_match);
 
-	while (p > end && op > 0 && *sliding_get_sb(control, op - 1) == *sliding_get_sb(control, p - 1)) {
+	while (p > end && op > 0
+			&& files_getDirectBufferByte(buffer, op - 1)
+					== files_getDirectBufferByte(buffer, p - 1)) {
 		op--;
 		p--;
 	}
@@ -506,10 +691,9 @@ sliding_match_len(rzip_control *control, struct rzip_state *st, i64 p0, i64 op,
 	return len;
 }
 
-static inline i64
-find_best_match(rzip_control *control, struct rzip_state *st, tag t, i64 p,
-		i64 end, i64 *offset, i64 *reverse)
-{
+
+static inline i64 find_best_match(rzip_control *control, struct rzip_state *st,
+		tag t, i64 p, i64 end, i64 *offset, i64 *reverse) {
 	struct hash_entry *he;
 	i64 length = 0;
 	i64 rev;
@@ -526,8 +710,7 @@ find_best_match(rzip_control *control, struct rzip_state *st, tag t, i64 p,
 		i64 mlen;
 
 		if (t == he->t) {
-			mlen = control->match_len(control, st, p, he->offset, end,
-						  &rev);
+			mlen = control->match_len(control, st, p, he->offset, end, &rev);
 			if (mlen) {
 				if (mlen > length) {
 					length = mlen;
@@ -547,8 +730,7 @@ find_best_match(rzip_control *control, struct rzip_state *st, tag t, i64 p,
 	return length;
 }
 
-static void show_distrib(rzip_control *control, struct rzip_state *st)
-{
+static void show_distrib(rzip_control *control, struct rzip_state *st) {
 	struct hash_entry *he;
 	i64 primary = 0;
 	i64 total = 0;
@@ -564,45 +746,48 @@ static void show_distrib(rzip_control *control, struct rzip_state *st)
 	}
 
 	if (total != st->hash_count)
-		print_err("WARNING: hash_count says total %'"PRId64"\n", st->hash_count);
+		print_err("WARNING: hash_count says total %'"PRId64"\n",
+				st->hash_count);
 
 	if (!total)
 		print_output("0 total hashes\n");
 	else {
-		print_output("%'"PRId64" total hashes -- %'"PRId64" in primary bucket (%-2.3f%%)\n",
-			     total, primary, primary * 100.0 / total);
+		print_output(
+				"%'"PRId64" total hashes -- %'"PRId64" in primary bucket (%-2.3f%%)\n",
+				total, primary, primary * 100.0 / total);
 	}
 }
 
 /* Perform all checksumming in a separate thread to speed up the hash search. */
-static void *cksumthread(void *data)
-{
-	rzip_control *control = (rzip_control *)data;
+static void* cksumthread(void *data) {
+	rzip_control *control = (rzip_control*) data;
 
 	pthread_detach(pthread_self());
 
 //	*control->checksum.cksum = CrcUpdate(*control->checksum.cksum, control->checksum.buf, control->checksum.len);
-	gcry_md_write(control->crc_handle, control->checksum.buf, control->checksum.len);
+	gcry_md_write(control->crc_handle, control->checksum.buf,
+			control->checksum.len);
 	if (HAS_HASH)
-		gcry_md_write(control->hash_handle, control->checksum.buf, control->checksum.len);
+		gcry_md_write(control->hash_handle, control->checksum.buf,
+				control->checksum.len);
 	dealloc(control->checksum.buf);
 	cksem_post(control, &control->cksumsem);
 	return NULL;
 }
 
-static inline void cksum_update(rzip_control *control)
-{
+static inline void cksum_update(rzip_control *control) {
 	pthread_t thread;
 
 	create_pthread(control, &thread, NULL, cksumthread, control);
 }
 
 static inline void hash_search(rzip_control *control, struct rzip_state *st,
-			       double pct_base, double pct_multiple)
-{
+		double pct_base, double pct_multiple) {
 	i64 cksum_limit = 0, p, end, cksum_chunks, cksum_remains, i;
 	tag t = 0, tag_mask = (1 << st->level->initial_freq) - 1;
-	struct sliding_buffer *sb = &control->sb;
+//	struct sliding_buffer *sb = &control->sb;
+	struct rzip_files_buffer *lowBuffer = control->rzip_files->lowBuffer;
+
 	int lastpct = 0, last_chunkpct = 0;
 	struct {
 		i64 p;
@@ -611,18 +796,23 @@ static inline void hash_search(rzip_control *control, struct rzip_state *st,
 	} current;
 
 	if (st->hash_table)
-		memset(st->hash_table, 0, sizeof(st->hash_table[0]) * (1<<st->hash_bits));
+		memset(st->hash_table, 0,
+				sizeof(st->hash_table[0]) * (1 << st->hash_bits));
 	else {
-		i64 hashsize = st->level->mb_used *
-				(ONE_MB / sizeof(st->hash_table[0]));
-		for (st->hash_bits = 0; (1U << st->hash_bits) < hashsize; st->hash_bits++);
+		i64 hashsize = st->level->mb_used
+				* (ONE_MB / sizeof(st->hash_table[0]));
+		for (st->hash_bits = 0; (1U << st->hash_bits) < hashsize;
+				st->hash_bits++)
+			;
 
-		print_maxverbose("hashsize = %'"PRId64".  bits = %'"PRId64". %'"PRIu32"MB\n",
-				 hashsize, st->hash_bits, st->level->mb_used);
+		print_maxverbose(
+				"hashsize = %'"PRId64".  bits = %'"PRId64". %'"PRIu32"MB\n",
+				hashsize, st->hash_bits, st->level->mb_used);
 
 		/* 66% full at max. */
 		st->hash_limit = (1 << st->hash_bits) / 3 * 2;
-		st->hash_table = calloc(sizeof(st->hash_table[0]), (1 << st->hash_bits));
+		st->hash_table = calloc(sizeof(st->hash_table[0]),
+				(1 << st->hash_bits));
 		if (unlikely(!st->hash_table))
 			fatal("Failed to allocate hash table in hash_search\n");
 	}
@@ -642,18 +832,23 @@ static inline void hash_search(rzip_control *control, struct rzip_state *st,
 	if (likely(end > 0))
 		t = control->full_tag(control, st, p);
 
+
 	while (p < end) {
 		i64 reverse, mlen, offset;
 
-		sb->offset_search = ++p;
-		if (unlikely(sb->offset_search > sb->offset_low + sb->size_low))
-			remap_low_sb(control, &control->sb);
+//		sb->offset_search = ++p;
+
+//		if (unlikely(sb->offset_search > sb->offset_low + sb->size_low))
+//			remap_low_sb(control, &control->sb);
+		++p;
+		// remap lower buffer, this is only single place, where is lower buffer remapped
+		files_mmapOffset(lowBuffer, p);
 
 		if (unlikely(p % 128 == 0 && st->chunk_size)) {
 			i64 chunk_pct;
 			int pct;
 
-			pct = pct_base + (pct_multiple * (100.0 * p) / st->chunk_size );
+			pct = pct_base + (pct_multiple * (100.0 * p) / st->chunk_size);
 			chunk_pct = p * 100 / end;
 			if (pct != lastpct || chunk_pct != last_chunkpct) {
 				if (!STDIN || st->stdin_eof)
@@ -668,7 +863,7 @@ static inline void hash_search(rzip_control *control, struct rzip_state *st,
 		control->next_tag(control, st, p, &t);
 
 		/* Don't look for a match if there are no tags with
-		   this number of bits in the hash table. */
+		 this number of bits in the hash table. */
 		if ((t & st->minimum_tag_mask) != st->minimum_tag_mask)
 			continue;
 
@@ -691,7 +886,7 @@ static inline void hash_search(rzip_control *control, struct rzip_state *st,
 		}
 
 		if ((current.len >= GREAT_MATCH || p >= current.p + MINIMUM_MATCH)
-		    && current.len >= MINIMUM_MATCH) {
+				&& current.len >= MINIMUM_MATCH) {
 			if (st->last_match < current.p)
 				put_literal(control, st, st->last_match, current.p);
 			put_match(control, st, current.p, current.ofs, current.len);
@@ -711,7 +906,8 @@ static inline void hash_search(rzip_control *control, struct rzip_state *st,
 			control->checksum.buf = malloc(control->checksum.len);
 			if (unlikely(!control->checksum.buf))
 				fatal("Failed to malloc ckbuf in hash_search\n");
-			control->do_mcpy(control, control->checksum.buf, cksum_limit, control->checksum.len);
+			control->do_mcpy(control->rzip_files, control->checksum.buf, cksum_limit,
+					control->checksum.len);
 //			control->checksum.cksum = &st->cksum;
 			cksum_limit += control->checksum.len;
 			cksum_update(control);
@@ -732,7 +928,8 @@ static inline void hash_search(rzip_control *control, struct rzip_state *st,
 			round_to_page(&cksum_len);
 			buf = malloc(cksum_len);
 			if (buf) {
-				print_maxverbose("Malloced %'"PRId64" for checksum ckbuf\n", cksum_len);
+				print_maxverbose("Malloced %'"PRId64" for checksum ckbuf\n",
+						cksum_len);
 				break;
 			}
 			cksum_len = cksum_len / 3 * 2;
@@ -749,35 +946,40 @@ static inline void hash_search(rzip_control *control, struct rzip_state *st,
 		cksum_remains = control->checksum.len % cksum_len;
 
 		for (i = 0; i < cksum_chunks; i++) {
-			control->do_mcpy(control, control->checksum.buf, cksum_limit, cksum_len);
+			control->do_mcpy(control->rzip_files, control->checksum.buf, cksum_limit,
+					cksum_len);
 			cksum_limit += cksum_len;
 //			st->cksum = CrcUpdate(st->cksum, control->checksum.buf, cksum_len);
-			gcry_md_write(control->crc_handle, control->checksum.buf, cksum_len);
+			gcry_md_write(control->crc_handle, control->checksum.buf,
+					cksum_len);
 			if (HAS_HASH)
-				gcry_md_write(control->hash_handle, control->checksum.buf, cksum_len);
+				gcry_md_write(control->hash_handle, control->checksum.buf,
+						cksum_len);
 		}
 		/* Process end of the checksum buffer */
-		control->do_mcpy(control, control->checksum.buf, cksum_limit, cksum_remains);
+		control->do_mcpy(control->rzip_files, control->checksum.buf, cksum_limit,
+				cksum_remains);
 //		st->cksum = CrcUpdate(st->cksum, control->checksum.buf, cksum_remains);
-		gcry_md_write(control->crc_handle, control->checksum.buf, cksum_remains);
+		gcry_md_write(control->crc_handle, control->checksum.buf,
+				cksum_remains);
 		if (HAS_HASH)
-			gcry_md_write(control->hash_handle, control->checksum.buf, cksum_remains);
+			gcry_md_write(control->hash_handle, control->checksum.buf,
+					cksum_remains);
 		dealloc(control->checksum.buf);
 		cksem_post(control, &control->cksumsem);
 	} else {
 		cksem_wait(control, &control->cksumsem);
 		cksem_post(control, &control->cksumsem);
 	}
-	memcpy(&st->cksum, gcry_md_read(control->crc_handle, *control->crc_gcode), *control->crc_len);
+	memcpy(&st->cksum, gcry_md_read(control->crc_handle, *control->crc_gcode),
+			*control->crc_len);
 
 	put_literal(control, st, 0, 0);
 	put_u32(control, st->ss, st->cksum);
 	gcry_md_reset(control->crc_handle);	// reset crc computation
 }
 
-
-static inline void init_hash_indexes(struct rzip_state *st)
-{
+static inline void init_hash_indexes(struct rzip_state *st) {
 	int i;
 
 	for (i = 0; i < 256; i++)
@@ -811,8 +1013,7 @@ static inline void *fake_mremap(void *old_address, size_t old_size, size_t new_s
  * we can use will be less but we will already have determined this in
  * rzip_chunk */
 static inline void mmap_stdin(rzip_control *control, uchar *buf,
-			      struct rzip_state *st)
-{
+		struct rzip_state *st) {
 	i64 len = st->chunk_size;
 	uchar *offset_buf = buf;
 	ssize_t ret;
@@ -821,7 +1022,7 @@ static inline void mmap_stdin(rzip_control *control, uchar *buf,
 	total = 0;
 	while (len > 0) {
 		ret = MIN(len, one_g);
-		ret = read(fileno(control->inFILE), offset_buf, (size_t)ret);
+		ret = read(fileno(control->inFILE), offset_buf, (size_t) ret);
 		if (unlikely(ret < 0))
 			fatal("Failed to read in mmap_stdin\n");
 		total += ret;
@@ -829,11 +1030,12 @@ static inline void mmap_stdin(rzip_control *control, uchar *buf,
 			/* Should be EOF */
 			print_maxverbose("Shrinking chunk to %'"PRId64"\n", total);
 			if (likely(total)) {
-				buf = (uchar *)mremap(buf, st->chunk_size, total, 0);
+				buf = (uchar*) mremap(buf, st->chunk_size, total, 0);
 				st->mmap_size = st->chunk_size = total;
 			} else {
 				/* Empty file */
-				buf = (uchar *)mremap(buf, st->chunk_size, control->page_size, 0);
+				buf = (uchar*) mremap(buf, st->chunk_size, control->page_size,
+						0);
 				st->mmap_size = control->page_size;
 				st->chunk_size = 0;
 			}
@@ -848,30 +1050,29 @@ static inline void mmap_stdin(rzip_control *control, uchar *buf,
 	control->st_size += total;
 }
 
-static inline void
-init_sliding_mmap(rzip_control *control, struct rzip_state *st, int fd_in,
-		  i64 offset)
-{
-	struct sliding_buffer *sb = &control->sb;
+//static inline void init_sliding_mmap(rzip_control *control,
+//		struct rzip_state *st, i64 offset) {
+//	struct sliding_buffer *sb = &control->sb;
+//
+//	/* Initialise the high buffer. One page size is fastest to manipulate */
+//	if (!STDIN) {
+//
+//		sb->high_length = control->page_size;
+//		sb->buf_high = (uchar*) mmap2(control, NULL, sb->high_length, PROT_READ,
+//		MAP_SHARED, offset);
+//		if (unlikely(sb->buf_high == MAP_FAILED))
+//			fatal("Unable to mmap buf_high in init_sliding_mmap\n");
+//		sb->size_high = sb->high_length;
+//		sb->offset_high = 0;
+//	}
+//	sb->offset_low = 0;
+//	sb->offset_search = 0;
+//	sb->size_low = st->mmap_size;
+//	sb->orig_size = st->chunk_size;
+////	sb->fd = fd_in;
+//}
 
-	/* Initialise the high buffer. One page size is fastest to manipulate */
-	if (!STDIN) {
-		sb->high_length = control->page_size;
-		sb->buf_high = (uchar *)mmap(NULL, sb->high_length, PROT_READ, MAP_SHARED, fd_in, offset);
-		if (unlikely(sb->buf_high == MAP_FAILED))
-			fatal("Unable to mmap buf_high in init_sliding_mmap\n");
-		sb->size_high = sb->high_length;
-		sb->offset_high = 0;
-	}
-	sb->offset_low = 0;
-	sb->offset_search = 0;
-	sb->size_low = st->mmap_size;
-	sb->orig_size = st->chunk_size;
-	sb->fd = fd_in;
-}
-
-static void add_to_sslist(rzip_control *control, struct rzip_state *st)
-{
+static void add_to_sslist(rzip_control *control, struct rzip_state *st) {
 	struct node *node = calloc(sizeof(struct node), 1);
 
 	if (unlikely(!node))
@@ -882,16 +1083,16 @@ static void add_to_sslist(rzip_control *control, struct rzip_state *st)
 }
 
 /* compress a chunk of an open file. Assumes that the file is able to
-   be mmap'd and is seekable */
-static inline void
-rzip_chunk(rzip_control *control, struct rzip_state *st, int fd_in, int fd_out,
-	   i64 offset, double pct_base, double pct_multiple)
-{
-	struct sliding_buffer *sb = &control->sb;
+ be mmap'd and is seekable */
+static inline void rzip_chunk(rzip_control *control, struct rzip_state *st,
+		int fd_out, i64 offset, double pct_base, double pct_multiple) {
+//	struct sliding_buffer *sb = &control->sb;
 
-	init_sliding_mmap(control, st, fd_in, offset);
+//	init_sliding_mmap(control, st, offset);
+//	files_mmapOffset(control, control->rzip_files->highBuffer, offset);
 
-	st->ss = open_stream_out(control, fd_out, NUM_STREAMS, st->chunk_size, st->chunk_bytes);
+	st->ss = open_stream_out(control, fd_out, NUM_STREAMS, st->chunk_size,
+			st->chunk_bytes);
 	if (unlikely(!st->ss))
 		fatal("Failed to open streams in rzip_chunk\n");
 
@@ -899,16 +1100,16 @@ rzip_chunk(rzip_control *control, struct rzip_state *st, int fd_in, int fd_out,
 	hash_search(control, st, pct_base, pct_multiple);
 
 	/* unmap buffer before closing and reallocating streams */
-	if (unlikely(munmap(sb->buf_low, sb->size_low))) {
-		close_stream_out(control, st->ss);
-		fatal("Failed to munmap in rzip_chunk\n");
-	}
-	if (!STDIN) {
-		if (unlikely(munmap(sb->buf_high, sb->size_high))) {
-			close_stream_out(control, st->ss);
-			fatal("Failed to munmap in rzip_chunk\n");
-		}
-	}
+//	if (unlikely(munmap(sb->buf_low, sb->size_low))) {
+//		close_stream_out(control, st->ss);
+//		fatal("Failed to munmap in rzip_chunk\n");
+//	}
+//	if (!STDIN) {
+//		if (unlikely(munmap(sb->buf_high, sb->size_high))) {
+//			close_stream_out(control, st->ss);
+//			fatal("Failed to munmap in rzip_chunk\n");
+//		}
+//	}
 
 	if (unlikely(close_stream_out(control, st->ss)))
 		fatal("Failed to flush/close streams in rzip_chunk\n");
@@ -918,8 +1119,7 @@ rzip_chunk(rzip_control *control, struct rzip_state *st, int fd_in, int fd_out,
 	add_to_sslist(control, st);
 }
 
-static void clear_sslist(struct rzip_state *st)
-{
+static void clear_sslist(struct rzip_state *st) {
 	while (st->head) {
 		struct node *node = st->head;
 		struct stream_info *sinfo = node->data;
@@ -931,10 +1131,10 @@ static void clear_sslist(struct rzip_state *st)
 	}
 }
 
+
 /* compress a whole file chunks at a time */
-void rzip_fd(rzip_control *control, int fd_in, int fd_out)
-{
-	struct sliding_buffer *sb = &control->sb;
+void rzip_fd(rzip_control *control, int fd_out) {
+//	struct sliding_buffer *sb = &control->sb;
 
 	/* add timers for ETA estimates
 	 * Base it off the file size and number of iterations required
@@ -948,16 +1148,20 @@ void rzip_fd(rzip_control *control, int fd_in, int fd_out)
 	double chunkmbs, tdiff;
 	struct rzip_state *st;
 	struct statvfs fbuf;
-	struct stat s, s2;
+	struct stat /*s,*/s2;
 	i64 free_space;
+
+	files_prepareCompression(control->rzip_files);
 
 	init_mutex(control, &control->control_lock);
 	/* init CRC */
-	gcry_md_open(&control->crc_handle, *control->crc_gcode, GCRY_MD_FLAG_SECURE);
+	gcry_md_open(&control->crc_handle, *control->crc_gcode,
+			GCRY_MD_FLAG_SECURE);
 	if (unlikely(control->crc_handle == NULL))
 		fatal("Cannot create CRC Handle in rzip_fd\n");
 	if (HAS_HASH) {
-		gcry_md_open(&control->hash_handle, *control->hash_gcode, GCRY_MD_FLAG_SECURE);
+		gcry_md_open(&control->hash_handle, *control->hash_gcode,
+				GCRY_MD_FLAG_SECURE);
 		if (unlikely(control->hash_handle == NULL))
 			fatal("Cannot create %s Handle in rzip_fd\n", *control->hash_label);
 	}
@@ -975,32 +1179,37 @@ void rzip_fd(rzip_control *control, int fd_in, int fd_out)
 		}
 	}
 
-	if (unlikely(fstat(fd_in, &s))) {
-		dealloc(st);
-		fatal("Failed to stat fd_in in rzip_fd\n");
-	}
+//	if (unlikely(fstat(fd_in, &s))) {
+//		dealloc(st);
+//		fatal("Failed to stat fd_in in rzip_fd\n");
+//	}
 
 	if (!STDIN) {
-		len = control->st_size = s.st_size;
-		print_verbose("File size: %'"PRId64"\n", len);
+		//len = control->st_size = s.st_size;
+		len = control->st_size = control->rzip_files->tmpOffset;
+		print_verbose("Input file(s) size: %'"PRId64"\n", len);
 	} else
 		control->st_size = 0;
 
+	int st_size = len;
+
 	if (!STDOUT) {
 		/* Check if there's enough free space on the device chosen to fit the
-		* compressed file, based on the compressed file being as large as the
-		* uncompressed file. */
+		 * compressed file, based on the compressed file being as large as the
+		 * uncompressed file. */
 		if (unlikely(fstatvfs(fd_out, &fbuf))) {
 			dealloc(st);
 			fatal("Failed to fstatvfs in compress_file\n");
 		}
-		free_space = (i64)fbuf.f_bsize * (i64)fbuf.f_bavail;
+		free_space = (i64) fbuf.f_bsize * (i64) fbuf.f_bavail;
 		if (free_space < control->st_size) {
 			if (FORCE_REPLACE)
-				print_output("Warning, possibly inadequate free space detected, but attempting to compress due to -f option being used.\n");
+				print_output(
+						"Warning, possibly inadequate free space detected, but attempting to compress due to -f option being used.\n");
 			else {
 				dealloc(st);
-				fatal("Possibly inadequate free space to compress file, use -f to override.\n");
+				fatal(
+						"Possibly inadequate free space to compress file, use -f to override.\n");
 			}
 		}
 	}
@@ -1033,7 +1242,7 @@ void rzip_fd(rzip_control *control, int fd_in, int fd_out)
 		round_to_page(&st->chunk_size);
 
 	st->level = &levels[control->rzip_compression_level];
-	st->fd_in = fd_in;
+//	st->fd_in = fd_in;
 	st->fd_out = fd_out;
 	st->stdin_eof = 0;
 
@@ -1046,14 +1255,15 @@ void rzip_fd(rzip_control *control, int fd_in, int fd_out)
 	gettimeofday(&start, NULL);
 
 	prepare_streamout_threads(control);
-	control->do_mcpy = single_mcpy;
-	control->next_tag = &single_next_tag;
-	control->full_tag = &single_full_tag;
-	control->match_len = &single_match_len;
+//	control->do_mcpy = single_mcpy;
+	control->do_mcpy = &fileCache_readRange;
+	control->next_tag = &sliding_next_tag2;
+	control->full_tag = &sliding_full_tag3;
+	control->match_len = &sliding_match_len3;
 
 	while (!pass || len > 0 || (STDIN && !st->stdin_eof)) {
 		double pct_base, pct_multiple;
-		i64 offset = s.st_size - len;
+		i64 offset = st_size - len;
 		int bits = 8;
 
 		st->chunk_size = control->max_chunk;
@@ -1066,72 +1276,82 @@ void rzip_fd(rzip_control *control, int fd_in, int fd_out)
 				st->mmap_size = control->page_size;
 		}
 
-retry:
-		if (STDIN) {
-			/* NOTE the buf is saved here for STDIN mode */
-			sb->buf_low = mmap(NULL, st->mmap_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-			/* Better to shrink the window to the largest size that works than fail */
-			if (sb->buf_low == MAP_FAILED) {
-				if (unlikely(errno != ENOMEM)) {
-					close_streamout_threads(control);
-					dealloc(st->hash_table);
-					dealloc(st);
-					fatal("Failed to mmap %s\n", control->infile);
-				}
-				st->mmap_size = st->mmap_size / 10 * 9;
-				round_to_page(&st->mmap_size);
-				if (unlikely(!st->mmap_size)) {
-					close_streamout_threads(control);
-					dealloc(st->hash_table);
-					dealloc(st);
-					fatal("Unable to mmap any ram\n");
-				}
-				goto retry;
-			}
-			st->chunk_size = st->mmap_size;
-			mmap_stdin(control, sb->buf_low, st);
-		} else {
-			/* NOTE The buf is saved here for !STDIN mode */
-			sb->buf_low = (uchar *)mmap(sb->buf_low, st->mmap_size, PROT_READ, MAP_SHARED, fd_in, offset);
-			if (sb->buf_low == MAP_FAILED) {
-				if (unlikely(errno != ENOMEM)) {
-					close_streamout_threads(control);
-					dealloc(st->hash_table);
-					dealloc(st);
-					fatal("Failed to mmap %s\n", control->infile);
-				}
-				st->mmap_size = st->mmap_size / 10 * 9;
-				round_to_page(&st->mmap_size);
-				if (unlikely(!st->mmap_size)) {
-					close_streamout_threads(control);
-					dealloc(st->hash_table);
-					dealloc(st);
-					fatal("Unable to mmap any ram\n");
-				}
-				goto retry;
-			}
-			if (st->mmap_size < st->chunk_size) {
-				print_maxverbose("Enabling sliding mmap mode and using mmap of %'"PRId64" bytes with window of %'"PRId64" bytes\n", st->mmap_size, st->chunk_size);
-				control->do_mcpy = &sliding_mcpy;
-				control->next_tag = &sliding_next_tag;
-				control->full_tag = &sliding_full_tag;
-				control->match_len = &sliding_match_len;
-			}
-		}
-		print_maxverbose("Succeeded in testing %'"PRId64" sized mmap for rzip pre-processing\n", st->mmap_size);
+		files_mmapOffset(control->rzip_files->lowBuffer, offset);
+
+//		retry: if (STDIN) {
+//			/* NOTE the buf is saved here for STDIN mode */
+//			sb->buf_low = mmap(NULL, st->mmap_size, PROT_READ | PROT_WRITE,
+//			MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+//			/* Better to shrink the window to the largest size that works than fail */
+//			if (sb->buf_low == MAP_FAILED) {
+//				if (unlikely(errno != ENOMEM)) {
+//					close_streamout_threads(control);
+//					dealloc(st->hash_table);
+//					dealloc(st);
+//					fatal("Failed to mmap %s\n", control->infile);
+//				}
+//				st->mmap_size = st->mmap_size / 10 * 9;
+//				round_to_page(&st->mmap_size);
+//				if (unlikely(!st->mmap_size)) {
+//					close_streamout_threads(control);
+//					dealloc(st->hash_table);
+//					dealloc(st);
+//					fatal("Unable to mmap any ram\n");
+//				}
+//				goto retry;
+//			}
+//			st->chunk_size = st->mmap_size;
+//			mmap_stdin(control, sb->buf_low, st);
+//		} else {
+//			/* NOTE The buf is saved here for !STDIN mode */
+//
+//			files_mmapOffset(control, control->rzip_files->lowBuffer, offset);
+////			sb->buf_low = (uchar*) mmap2(control, sb->buf_low, st->mmap_size,
+////			PROT_READ, MAP_SHARED, offset);
+//			if (sb->buf_low == MAP_FAILED) {
+//				if (unlikely(errno != ENOMEM)) {
+//					close_streamout_threads(control);
+//					dealloc(st->hash_table);
+//					dealloc(st);
+//					fatal("Failed to mmap %s\n", control->infile);
+//				}
+//				st->mmap_size = st->mmap_size / 10 * 9;
+//				round_to_page(&st->mmap_size);
+//				if (unlikely(!st->mmap_size)) {
+//					close_streamout_threads(control);
+//					dealloc(st->hash_table);
+//					dealloc(st);
+//					fatal("Unable to mmap any ram\n");
+//				}
+//				goto retry;
+//			}
+//			if (st->mmap_size < st->chunk_size) {
+//				print_maxverbose(
+//						"Enabling sliding mmap mode and using mmap of %'"PRId64" bytes with window of %'"PRId64" bytes\n",
+//						st->mmap_size, st->chunk_size);
+//				control->do_mcpy = &sliding_mcpy;
+//				control->next_tag = &sliding_next_tag;
+//				control->full_tag = &sliding_full_tag;
+//				control->match_len = &sliding_match_len;
+//			}
+//		}
+		print_maxverbose(
+				"Succeeded in testing %'"PRId64" sized mmap for rzip pre-processing\n",
+				st->mmap_size);
 
 		if (st->chunk_size > control->ramsize)
-			print_verbose("Compression window is larger than ram, will proceed with unlimited mode possibly much slower\n");
+			print_verbose(
+					"Compression window is larger than ram, will proceed with unlimited mode possibly much slower\n");
 
 		if (!passes && !STDIN && st->chunk_size) {
-			passes = s.st_size / st->chunk_size + !!(s.st_size % st->chunk_size);
+			passes = st_size / st->chunk_size + !!(st_size % st->chunk_size);
 			if (passes == 1)
 				print_verbose("Will take 1 pass\n");
 			else
 				print_verbose("Will take %'d passes\n", passes);
 		}
 
-		sb->orig_offset = offset;
+//		sb->orig_offset = offset;
 		print_maxverbose("Chunk size: %'"PRId64"\n", st->chunk_size);
 
 		/* Determine the chunk byte width to write to the file
@@ -1150,7 +1370,7 @@ retry:
 			pct_base = (100.0 * -len) / control->st_size;
 		else
 			pct_base = (100.0 * (control->st_size - len)) / control->st_size;
-		pct_multiple = ((double)st->chunk_size) / control->st_size;
+		pct_multiple = ((double) st->chunk_size) / control->st_size;
 		pass++;
 		if (st->stdin_eof)
 			passes = pass;
@@ -1158,8 +1378,9 @@ retry:
 		gettimeofday(&current, NULL);
 		/* this will count only when size > window */
 		if (last.tv_sec > 0 && pct_base > 0) {
-			unsigned int eta_hours, eta_minutes, eta_seconds, elapsed_time, finish_time,
-				elapsed_hours, elapsed_minutes, elapsed_seconds, diff_seconds;
+			unsigned int eta_hours, eta_minutes, eta_seconds, elapsed_time,
+					finish_time, elapsed_hours, elapsed_minutes,
+					elapsed_seconds, diff_seconds;
 
 			elapsed_time = current.tv_sec - start.tv_sec;
 			finish_time = elapsed_time / (pct_base / 100.0);
@@ -1171,21 +1392,27 @@ retry:
 			eta_minutes = (diff_seconds / 60) % 60;
 			eta_seconds = diff_seconds % 60;
 
-			chunkmbs = (last_chunk / ONE_MB) / (double)(current.tv_sec-last.tv_sec);
+			chunkmbs = (last_chunk / ONE_MB)
+					/ (double) (current.tv_sec - last.tv_sec);
 			if (!STDIN || st->stdin_eof)
-				print_verbose("\nPass %'d / %'d -- Elapsed Time: %02d:%02d:%02d. ETA: %02d:%02d:%02d. Compress Speed: %3.3fMB/s.\n",
-					pass, passes, elapsed_hours, elapsed_minutes, elapsed_seconds,
-					eta_hours, eta_minutes, eta_seconds, chunkmbs);
+				print_verbose(
+						"\nPass %'d / %'d -- Elapsed Time: %02d:%02d:%02d. ETA: %02d:%02d:%02d. Compress Speed: %3.3fMB/s.\n",
+						pass, passes, elapsed_hours, elapsed_minutes,
+						elapsed_seconds, eta_hours, eta_minutes, eta_seconds,
+						chunkmbs);
 			else
-				print_verbose("\nPass %'d -- Elapsed Time: %02d:%02d:%02d. Compress Speed: %3.3fMB/s.\n",
-					pass, elapsed_hours, elapsed_minutes, elapsed_seconds, chunkmbs);
+				print_verbose(
+						"\nPass %'d -- Elapsed Time: %02d:%02d:%02d. Compress Speed: %3.3fMB/s.\n",
+						pass, elapsed_hours, elapsed_minutes, elapsed_seconds,
+						chunkmbs);
 		}
 		last.tv_sec = current.tv_sec;
 		last.tv_usec = current.tv_usec;
 
 		if (st->chunk_size == len)
 			control->eof = 1;
-		rzip_chunk(control, st, fd_in, fd_out, offset, pct_base, pct_multiple);
+		rzip_chunk(control, st, /*fd_in,*/fd_out, offset, pct_base,
+				pct_multiple);
 
 		/* st->chunk_size may be shrunk in rzip_chunk */
 		last_chunk = st->chunk_size;
@@ -1194,7 +1421,8 @@ retry:
 			close_streamout_threads(control);
 			dealloc(st->hash_table);
 			dealloc(st);
-			fatal("Wrote EOF to file yet chunk_size was shrunk, corrupting archive.\n");
+			fatal(
+					"Wrote EOF to file yet chunk_size was shrunk, corrupting archive.\n");
 		}
 	}
 
@@ -1207,11 +1435,13 @@ retry:
 
 	if (HAS_HASH) {
 		/* if we're using an XOF function, i.e. SLACK128, then use md_extract */
-		if ( control->hash_code < SHAKE128_16 )
-			memcpy(control->hash_resblock, gcry_md_read(control->hash_handle, *control->hash_gcode),
-			       *control->hash_len);
+		if (control->hash_code < SHAKE128_16)
+			memcpy(control->hash_resblock,
+					gcry_md_read(control->hash_handle, *control->hash_gcode),
+					*control->hash_len);
 		else
-			gcry_md_extract(control->hash_handle, *control->hash_gcode, control->hash_resblock, *control->hash_len);
+			gcry_md_extract(control->hash_handle, *control->hash_gcode,
+					control->hash_resblock, *control->hash_len);
 		if (HASH_CHECK || MAX_VERBOSE) {
 			print_progress("%s: ", control->hash_label);
 			for (j = 0; j < *control->hash_len; j++)
@@ -1220,15 +1450,22 @@ retry:
 		}
 		/* When encrypting data, we encrypt the hash value as well */
 		if (ENCRYPT)
-			if (unlikely(!lrz_encrypt(control, control->hash_resblock, *control->hash_len, control->salt_pass))) {
+			if (unlikely(
+					!lrz_encrypt(control, control->hash_resblock,
+							*control->hash_len, control->salt_pass))) {
 				dealloc(st);
 				fatal("Failed to lrz_encrypt in rzip_fd\n");
 			}
-		if (unlikely(write_1g(control, control->hash_resblock, *control->hash_len) != *control->hash_len)) {
+		if (unlikely(
+				write_1g(control, control->hash_resblock, *control->hash_len)
+						!= *control->hash_len)) {
 			dealloc(st);
 			fatal("Failed to write md5 in rzip_fd\n");
 		}
 	}
+
+	// TODO: write files_serialize
+
 
 	if (TMP_OUTBUF) {
 		if (unlikely(!flush_tmpoutbuf(control))) {
@@ -1239,23 +1476,26 @@ retry:
 
 	gettimeofday(&current, NULL);
 	if (STDIN)
-		s.st_size = control->st_size;
+		st_size = control->st_size;
 	tdiff = current.tv_sec - start.tv_sec;
 	if (!tdiff)
 		tdiff = 1;
-	chunkmbs = (s.st_size / ONE_MB) / tdiff;
+	chunkmbs = (st_size / ONE_MB) / tdiff;
 
 	fstat(fd_out, &s2);
 
 	print_maxverbose("matches=%'u match_bytes=%'u\n",
-	       (unsigned int)st->stats.matches, (unsigned int)st->stats.match_bytes);
+			(unsigned int )st->stats.matches,
+			(unsigned int )st->stats.match_bytes);
 	print_maxverbose("literals=%'u literal_bytes=%'u\n",
-	       (unsigned int)st->stats.literals, (unsigned int)st->stats.literal_bytes);
+			(unsigned int )st->stats.literals,
+			(unsigned int )st->stats.literal_bytes);
 	print_maxverbose("true_tag_positives=%'u false_tag_positives=%'u\n",
-	       (unsigned int)st->stats.tag_hits, (unsigned int)st->stats.tag_misses);
+			(unsigned int )st->stats.tag_hits,
+			(unsigned int )st->stats.tag_misses);
 	print_maxverbose("inserts=%'u match %.3f\n",
-	       (unsigned int)st->stats.inserts,
-	       (1.0 + st->stats.match_bytes) / st->stats.literal_bytes);
+			(unsigned int )st->stats.inserts,
+			(1.0 + st->stats.match_bytes) / st->stats.literal_bytes);
 
 	if (!STDIN)
 		print_progress("%s - ", control->infile);
@@ -1263,9 +1503,10 @@ retry:
 		print_progress("STDIN - ");
 
 	if (!STDOUT)
-		print_progress("Compression Ratio: %.3f. bpb: %.3f. Average Compression Speed: %6.3fMB/s.\n",
-				1.0 * s.st_size / s2.st_size,
-				8.0 * s2.st_size / s.st_size, chunkmbs);
+		print_progress(
+				"Compression Ratio: %.3f. bpb: %.3f. Average Compression Speed: %6.3fMB/s.\n",
+				1.0 * st_size / s2.st_size, 8.0 * s2.st_size / st_size,
+				chunkmbs);
 	else
 		print_progress("Cannot compute compression ratio with STDOUT\n");
 
@@ -1273,4 +1514,29 @@ retry:
 	gcry_md_close(control->hash_handle);
 	gcry_md_close(control->crc_handle);
 	dealloc(st);
+
+
+	// serialize files
+	char *filesHolderFilename=files_createFilesHolderName(control->outfile);
+
+	int fd_files = open(filesHolderFilename, O_RDWR | O_CREAT |O_TRUNC/*| O_EXCL*/, 0666);
+	if(fd_files<0) {
+
+		fatal("Cannot create a files holder file");
+	}
+
+	files_serialize(control->rzip_files, fd_files);
+
+	close(fd_files);
+	free(filesHolderFilename);
+
+
+
+	printf("fileCache_readRange_count=%'lu\n", fileCache_readRange_count);
+	printf("sliding_full_tag2_count=%'lu\n", sliding_full_tag2_count);
+	printf("sliding_next_tag2_count=%'lu\n", sliding_next_tag2_count);
+	printf("sliding_match_len2_count=%'lu\n", sliding_match_len2_count);
+	printf("remap_count=%'lu\n", remap_count);
+
 }
+

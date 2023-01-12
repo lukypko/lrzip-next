@@ -40,10 +40,15 @@
 # include <arpa/inet.h>
 #endif
 
+#include <libgen.h>
 #include "runzip.h"
 #include "stream.h"
 #include "util.h"
 #include "lrzip_core.h"
+#include "files.h"
+#include "filesBufferCache.h"
+
+
 
 /* Work Function to compute hash of a file stream */
 int hash_stream ( FILE *, uchar *, int, int );
@@ -165,7 +170,9 @@ static i64 unzip_literal(rzip_control *control, void *ss, i64 len)
 		fatal("Failed to read_stream in unzip_literal\n");
 	}
 
-	if (unlikely(write_1g(control, buf, (size_t)stream_read) != (ssize_t)stream_read)) {
+	if (unlikely(fileCache_writeRange(control->rzip_files, buf, stream_read) != (ssize_t)stream_read)) {
+
+	//if (unlikely(write_1g(control, buf, (size_t)stream_read) != (ssize_t)stream_read)) {
 		dealloc(buf);
 		fatal("Failed to write literal buffer of size %'"PRId64"\n", stream_read);
 	}
@@ -201,19 +208,25 @@ static i64 unzip_match(rzip_control *control, void *ss, i64 len, int chunk_bytes
 		fatal("len %'"PRId64" is negative in unzip_match!\n",len);
 
 	total = 0;
-	cur_pos = seekcur_fdout(control);
-	if (unlikely(cur_pos == -1))
-		fatal("Seek failed on out file in unzip_match.\n");
+//	cur_pos = seekcur_fdout(control);
+//	if (unlikely(cur_pos == -1))
+//		fatal("Seek failed on out file in unzip_match.\n");
 
 	/* Note the offset is in a different format v0.40+ */
 	offset = read_vchars(control, ss, 0, chunk_bytes);
 	if (unlikely(offset == -1))
 		return -1;
-	if (unlikely(seekto_fdhist(control, cur_pos - offset) == -1))
-		fatal("Seek failed by %'d from %'d on history file in unzip_match\n",
-		      offset, cur_pos);
+//	if (unlikely(seekto_fdhist(control, cur_pos - offset) == -1))
+//		fatal("Seek failed by %'d from %'d on history file in unzip_match\n",
+//		      offset, cur_pos);
+
+
+//	i64 cur_pos2 = seekcur_fdout(control);
+
+	i64 deltaOffset=control->rzip_files->tmpOffset-offset;
 
 	n = MIN(len, offset);
+//	n = len;
 	if (unlikely(n < 1))
 		fatal("Failed fd history in unzip_match due to corrupt archive\n");
 
@@ -221,17 +234,22 @@ static i64 unzip_match(rzip_control *control, void *ss, i64 len, int chunk_bytes
 	if (unlikely(!buf))
 		fatal("Failed to malloc match buffer of size %'"PRId64"\n", len);
 
-	if (unlikely(read_fdhist(control, buf, (size_t)n) != (ssize_t)n)) {
+	if (unlikely(fileCache_readRange(control->rzip_files, buf, deltaOffset, n) != (ssize_t)n)) {
+
+//	if (unlikely(read_fdhist(control, buf, (size_t)n) != (ssize_t)n)) {
 		dealloc(buf);
 		fatal("Failed to read %d bytes in unzip_match\n", n);
 	}
 
 	while (len) {
 		n = MIN(len, offset);
+//		n = len;
 		if (unlikely(n < 1))
 			fatal("Failed fd history in unzip_match due to corrupt archive\n");
 
-		if (unlikely(write_1g(control, buf, (size_t)n) != (ssize_t)n)) {
+
+		if (unlikely(fileCache_writeRange(control->rzip_files, buf, n) != (ssize_t)n)) {
+//		if (unlikely(write_1g(control, buf, (size_t)n) != (ssize_t)n)) {
 			dealloc(buf);
 			fatal("Failed to read %'d bytes in unzip_match\n", n);
 		}
@@ -389,6 +407,25 @@ i64 runzip_fd(rzip_control *control, int fd_in, int fd_out, int fd_hist, i64 exp
 	struct timeval start,end;
 	i64 total = 0, u;
 	double tdiff;
+
+	// deserialize files
+	char *filesHolderFilename = files_createFilesHolderName(control->infile);
+
+	int fd_files = open(filesHolderFilename, O_RDONLY, 0666);
+	if (fd_files < 0) {
+		fatal("Cannot open a files holder file");
+	}
+
+	control->rzip_files = files_deserialize(control->rzip_files, fd_files);
+
+	close(fd_files);
+	free(filesHolderFilename);
+
+	// free just a `basepath`
+	control->rzip_files->basePath = realpath(control->outdir, NULL);
+
+	files_prepareDecompression(control->rzip_files);
+
 
 	hash_stored = calloc(*control->hash_len, 1);
 

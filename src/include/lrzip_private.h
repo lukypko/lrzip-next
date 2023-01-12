@@ -414,7 +414,7 @@ struct runzip_node {
 };
 
 struct rzip_state {
-	void *ss;
+	void *ss; // structure stream_info
 	struct node *sslist;
 	struct node *head;
 	struct level *level;
@@ -430,7 +430,7 @@ struct rzip_state {
 	i64 mmap_size;
 	char chunk_bytes;
 	uint32_t cksum;
-	int fd_in, fd_out;
+	int /*fd_in,*/ fd_out;
 	char stdin_eof;
 	struct {
 		i64 inserts;
@@ -446,9 +446,17 @@ struct rzip_state {
 /* lrzip library callback code removed */
 struct rzip_control {
 	char *locale;			// locale code
+
+	/** Input file name*/
 	char *infile;
 	FILE *inFILE; 			// if a FILE is being read from
+
+	/** Output file name*/
 	char *outname;
+
+	/** Temporary output file name
+	lrzipout.XXXXXX
+	*/
 	char *outfile;
 	FILE *outFILE;			// if a FILE is being written to
 	char *outdir;
@@ -492,8 +500,25 @@ struct rzip_control {
 	char minor_version;
 	i64 st_size;
 	long page_size;
+
+	/**
+	 * File descriptor (handle) of input file
+	 */
 	int fd_in;
+
+	/**
+	 * Files stored in archive
+	 */
+	struct rzip_files *rzip_files;
+
+	/**
+	 * File descriptor (handle) of output file (opened as R/W)
+	 */
 	int fd_out;
+
+	/**
+	 * File descriptor (handle) of output file (opened as readonly)
+	 */
 	int fd_hist;
 	i64 encloops;
 	i64 secs;
@@ -541,8 +566,8 @@ struct rzip_control {
 	FILE *outputfile;
 
 	char chunk_bytes;
-	struct sliding_buffer sb;
-	void (*do_mcpy)(rzip_control *, unsigned char *, i64, i64);
+//	struct sliding_buffer sb;
+	i64 (*do_mcpy)(struct rzip_files *, unsigned char *, i64, i64);
 	void (*next_tag)(rzip_control *, struct rzip_state *, i64, tag *);
 	tag (*full_tag)(rzip_control *, struct rzip_state *, i64);
 	i64 (*match_len)(rzip_control *, struct rzip_state *, i64, i64, i64, i64 *);
