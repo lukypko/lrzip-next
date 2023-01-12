@@ -34,6 +34,10 @@ AC_SUBST(VMAJ)
 AC_CANONICAL_BUILD
 AC_CANONICAL_HOST
 
+# added debug symbols
+CFLAGS="-O0 -g"
+CXXFLAGS="-O0 -g"
+
 dnl Checks for programs.
 AC_PROG_CC
 AC_PROG_CXX
