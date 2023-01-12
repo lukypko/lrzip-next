@@ -36,3 +36,9 @@ test/regressiontest.out
 src/demo/decompress_demo
 src/demo/liblrzip_demo
 /build/
+.settings/
+compressionTest/
+.cproject
+.project
+*.patch
+*.orig
