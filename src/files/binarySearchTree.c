@@ -14,11 +14,10 @@
 /**
  * Save those variables into a stack
  */
-static void beforeRecursion(struct stack *stack, int codeSegment,
-		int64_t *start, int64_t *end, struct binary_search_tree_node *node) {
+static void beforeRecursion(struct stack *stack, int codeSegment, int64_t *start, int64_t *end, struct binary_search_tree_node *node)
+{
 
-	struct binary_search_tree_balance *balance = malloc(
-			sizeof(struct binary_search_tree_balance));
+	struct binary_search_tree_balance *balance = malloc(sizeof(struct binary_search_tree_balance));
 
 	// store a clone of codeSegment
 	balance->codeSegment = malloc(sizeof(int));
@@ -35,8 +34,7 @@ static void beforeRecursion(struct stack *stack, int codeSegment,
 	// do not clone a node
 	balance->node = node;
 
-	printf("push start=%d, end=%d, node=%d, codeSegment=%d\n", *start, *end,
-			node->value, codeSegment);
+//	printf("push start=%d, end=%d, node=%d, codeSegment=%d\n", *start, *end, node->value, codeSegment);
 
 	stack_push(stack, balance);
 }
@@ -44,8 +42,8 @@ static void beforeRecursion(struct stack *stack, int codeSegment,
 /**
  * Load those variables value from a stack
  */
-static bool afterRecursion(struct stack *stack, int *codeSegment,
-		int64_t *start, int64_t *end, struct binary_search_tree_node **node) {
+static bool afterRecursion(struct stack *stack, int *codeSegment, int64_t *start, int64_t *end, struct binary_search_tree_node **node)
+{
 
 	struct binary_search_tree_balance *balance;
 	bool exist = stack_pop(stack, (void**) &balance);
@@ -60,15 +58,14 @@ static bool afterRecursion(struct stack *stack, int *codeSegment,
 		free(balance->end);
 		free(balance);
 
-		printf("pop start=%d, end=%d, node=%d, codeSegment=%d\n", *start, *end,
-				(*node)->value, *codeSegment);
+//		printf("pop start=%d, end=%d, node=%d, codeSegment=%d\n", *start, *end, (*node)->value, *codeSegment);
 	}
 
 	return exist;
 }
 
-static struct binary_search_tree_node* walkRecursive(
-		struct binary_search_tree *tree, int64_t start, int64_t end) {
+static struct binary_search_tree_node* walkRecursive(struct binary_search_tree *tree, int64_t start, int64_t end)
+{
 
 	struct binary_search_tree_node *newItem;
 
@@ -83,11 +80,9 @@ static struct binary_search_tree_node* walkRecursive(
 	newItem->value = tree->sourceItems[middle];
 
 	newItem->left = walkRecursive(tree, start, middle - 1);
-	printf("Setting value of %d->left to %d\n", newItem->value,
-			newItem->left != NULL ? newItem->left->value : NULL);
+	printf("Setting value of %d->left to %d\n", newItem->value, newItem->left != NULL ? newItem->left->value : NULL);
 	newItem->right = walkRecursive(tree, middle + 1, end);
-	printf("Setting value of %d->right to %d\n", newItem->value,
-			newItem->right != NULL ? newItem->right->value : NULL);
+	printf("Setting value of %d->right to %d\n", newItem->value, newItem->right != NULL ? newItem->right->value : NULL);
 
 	printf("Return %d\n", newItem->value);
 	return newItem;
@@ -96,7 +91,8 @@ static struct binary_search_tree_node* walkRecursive(
 /**
  * Recursive version
  */
-static void walk1(struct binary_search_tree *tree) {
+static void walk1(struct binary_search_tree *tree)
+{
 
 	tree->root = walkRecursive(tree, 0, tree->nodeCount - 1);
 }
@@ -131,7 +127,8 @@ static void walk1(struct binary_search_tree *tree) {
  return root;
  }
  */
-static void walk2(struct binary_search_tree *tree) {
+static void walk2(struct binary_search_tree *tree)
+{
 
 	int64_t start = 0;
 	int64_t end = tree->nodeCount - 1;
@@ -155,8 +152,7 @@ static void walk2(struct binary_search_tree *tree) {
 
 				returnValue = NULL;
 
-				if (!afterRecursion(stack, &codeSegment, &start, &end,
-						&newItem)) {
+				if (!afterRecursion(stack, &codeSegment, &start, &end, &newItem)) {
 					goto cycleDone;
 				}
 				break;
@@ -172,8 +168,7 @@ static void walk2(struct binary_search_tree *tree) {
 		case 1:
 
 			newItem->left = returnValue;
-			printf("Setting value of %d->left to %d\n", newItem->value,
-					returnValue != NULL ? returnValue->value : NULL);
+			printf("Setting value of %d->left to %d\n", newItem->value, returnValue != NULL ? returnValue->value : NULL);
 			v = 2;
 			beforeRecursion(stack, 2, &start, &end, newItem);
 
@@ -185,8 +180,7 @@ static void walk2(struct binary_search_tree *tree) {
 		case 2:
 
 			newItem->right = returnValue;
-			printf("Setting value of %d->right to %d\n", newItem->value,
-					returnValue != NULL ? returnValue->value : NULL);
+			printf("Setting value of %d->right to %d\n", newItem->value, returnValue != NULL ? returnValue->value : NULL);
 			returnValue = newItem;
 
 			if (!afterRecursion(stack, &codeSegment, &start, &end, &newItem)) {
@@ -202,7 +196,8 @@ static void walk2(struct binary_search_tree *tree) {
 	tree->root = returnValue;
 }
 
-static void walk3(struct binary_search_tree *tree) {
+static void walk3(struct binary_search_tree *tree)
+{
 
 	int64_t start = 0;
 	int64_t end = tree->nodeCount - 1;
@@ -239,8 +234,7 @@ static void walk3(struct binary_search_tree *tree) {
 			case 1:
 
 				newItem->left = returnValue;
-				printf("Setting value of %d->left to %d\n", newItem->value,
-						returnValue != NULL ? returnValue->value : NULL);
+//				printf("Setting value of %d->left to %d\n", newItem->value, returnValue != NULL ? returnValue->value : NULL);
 				beforeRecursion(stack, 2, &start, &end, newItem);
 
 				start = middle + 1;
@@ -249,8 +243,7 @@ static void walk3(struct binary_search_tree *tree) {
 			case 2:
 
 				newItem->right = returnValue;
-				printf("Setting value of %d->right to %d\n", newItem->value,
-						returnValue != NULL ? returnValue->value : NULL);
+//				printf("Setting value of %d->right to %d\n", newItem->value, returnValue != NULL ? returnValue->value : NULL);
 				returnValue = newItem;
 				goto recursiveReturn;
 
@@ -265,10 +258,10 @@ static void walk3(struct binary_search_tree *tree) {
 }
 
 /**
- * Convert a linkedList to array, validate order of input items
+ * Convert a sorted linkedList to array, validate order of input items
  */
-static void binarySearchlinkedList_toArray(struct binary_search_tree *tree,
-		struct linked_list *items) {
+static void binarySearchlinkedList_toArray(struct binary_search_tree *tree, struct linked_list *items)
+{
 
 	tree->nodeCount = linkedList_count(items);
 	tree->sourceItems = malloc(sizeof(void*) * tree->nodeCount);
@@ -280,8 +273,7 @@ static void binarySearchlinkedList_toArray(struct binary_search_tree *tree,
 
 		if (i > 0) {
 			if (tree->valueComparator(lastItem, listItem->item) > 0) {
-				printf(
-						"binarySearchTree: errorl linked list items must be sorted");
+				printf("binarySearchTree: error linked list items must be sorted");
 				exit(1);
 			}
 		}
@@ -293,12 +285,14 @@ static void binarySearchlinkedList_toArray(struct binary_search_tree *tree,
 	}
 }
 
-struct binary_search_tree* binarySearchTree_init(
-		int (*valueComparator)(void*/*value1*/, void*/*value2*/),
-		struct linked_list *items) {
+struct binary_search_tree* binarySearchTree_init(int (*valueComparator)(void*/*value1*/, void*/*value2*/),
+		int (*searchComparator)(void*/*value1*/, void*/*value2*/),
+		struct linked_list *items)
+{
 
 	struct binary_search_tree *tree = malloc(sizeof(struct binary_search_tree));
 	tree->valueComparator = valueComparator;
+	tree->searchComparator = searchComparator;
 	tree->root = NULL;
 
 	binarySearchlinkedList_toArray(tree, items);
@@ -313,8 +307,8 @@ struct binary_search_tree* binarySearchTree_init(
 /**
  * Compare two items using a tree specified comparator.
  */
-int binarySearchTree_compare(struct binary_search_tree *tree, void *item1,
-		void *item2) {
+static int binarySearchTree_compare(struct binary_search_tree *tree, void *item1, void *item2)
+{
 
 	return tree->valueComparator(item1, item2);
 }
@@ -364,16 +358,37 @@ int binarySearchTree_compare(struct binary_search_tree *tree, void *item1,
 //	}
 //}
 
-void binarySearchTree_search(struct binary_search_tree *tree, void *value) {
+void* binarySearchTree_search(struct binary_search_tree *tree, void *value)
+{
+	struct binary_search_tree_node *item = tree->root;
 
+	while (item != NULL) {
+
+		int cmp = tree->searchComparator(value, item->value);
+		if (cmp < 0) {
+
+			//go left
+			item = item->left;
+		} else if (cmp > 0) {
+
+			//go right
+			item = item->right;
+		} else {
+
+			// item found
+			return item->value;
+		}
+	}
+
+	// reached end ot the tree, item not found
+	return NULL;
 }
 
 /**
  * Deallocate tree.
  */
-void binarySearchTree_cleanup(struct binary_search_tree *tree,
-		void (*itemDestructor)(struct linked_list_item*/*linkedList_item*/,
-				void* /*linked_list item*/)) {
+void binarySearchTree_cleanup(struct binary_search_tree *tree, void (*itemDestructor)(struct linked_list_item*/*linkedList_item*/, void* /*linked_list item*/))
+{
 //
 //	struct linked_list_item *item = linkedList->start;
 //	struct linked_list_item *next;

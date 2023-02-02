@@ -165,14 +165,14 @@ struct rzip_files_buffer {
 	 */
 	struct rzip_files *origin;
 
-	/**
-	 * Which file from rzip_files is this buffer mapped from.
-	 * For 64-bit systems it is 1:1 mapping,
-	 * but for 32-bit system one large file (>2GB) is mapped into multiple buffers (as it is not possible to mmap >2GB files)
-	 *
-	 * Type of `struct rzip_file *`
-	 */
-	struct linked_list_item *rzip_file;
+//	/**
+//	 * Which file from rzip_files is this buffer mapped from.
+//	 * For 64-bit systems it is 1:1 mapping,
+//	 * but for 32-bit system one large file (>2GB) is mapped into multiple buffers (as it is not possible to mmap >2GB files)
+//	 *
+//	 * Type of `struct rzip_file *`
+//	 */
+//	struct linked_list_item *rzip_file;
 
 	/**
 	 * First file.
@@ -268,6 +268,6 @@ void files_prepareCompression(struct rzip_files *rzip_files);
 int64_t files_min(int64_t a, int64_t b);
 int64_t files_max(int64_t a, int64_t b);
 
-void files_remapLower(struct rzip_files_buffer *buffer, int64_t offset);
+//void files_remapLower(struct rzip_files_buffer *buffer, int64_t offset);
 
 #endif /* SRC_FILES_FILES_H_ */

@@ -24,7 +24,8 @@
 /**
  * create an in-archive file name based on its provided (external) file name.
  */
-static char* getLocalFileName(char *path, char *baseFolder) {
+static char* getLocalFileName(char *path, char *baseFolder)
+{
 
 	int pathLen = strlen(path);
 
@@ -50,7 +51,8 @@ static char* getLocalFileName(char *path, char *baseFolder) {
 /**
  * Concatenate two paths, allocates a new buffer, add a `/`
  */
-static char* concatStrings(char *first, char *second) {
+static char* concatStrings(char *first, char *second)
+{
 
 	int len1 = strlen(first);
 	int len2 = strlen(second);
@@ -232,8 +234,8 @@ static char* concatStrings(char *first, char *second) {
 //
 //}
 
-static struct rzip_file* createReadFileItem(struct rzip_files *rzip,
-		struct folderTraversal *sourceFile) {
+static struct rzip_file* createReadFileItem(struct rzip_files *rzip, struct folderTraversal *sourceFile)
+{
 
 	struct rzip_file *fileItem = malloc(sizeof(struct rzip_file));
 
@@ -258,18 +260,19 @@ static struct rzip_file* createReadFileItem(struct rzip_files *rzip,
 	return fileItem;
 }
 
-static void createDestinationFolder(char *filePath) {
+static void createDestinationFolder(char *filePath)
+{
 
 	char *folderPath = strdup(filePath);
-	char *folderPath2=dirname(folderPath);
+	char *folderPath2 = dirname(folderPath);
 
 	mkdir(folderPath2, 0777);
 
 	free(folderPath);
 }
 
-static void createWriteFileItem(struct rzip_files *rzip,
-		struct rzip_file *fileItem) {
+static void createWriteFileItem(struct rzip_files *rzip, struct rzip_file *fileItem)
+{
 
 	char *filePath = concatStrings(rzip->basePath, fileItem->filePath);
 
@@ -407,7 +410,8 @@ static void createWriteFileItem(struct rzip_files *rzip,
 /**
  configure offsets for newly added file
  */
-static void addPathOffsets(struct rzip_files *rzip, struct rzip_file *rzip_file) {
+static void addPathOffsets(struct rzip_files *rzip, struct rzip_file *rzip_file)
+{
 
 	// configure offsets for newly added file
 	rzip_file->dataOffset = rzip->tmpOffset;
@@ -416,7 +420,8 @@ static void addPathOffsets(struct rzip_files *rzip, struct rzip_file *rzip_file)
 	rzip_file->dataEndByte = rzip_file->dataOffset + rzip_file->fileLength;
 }
 
-void files_addPath(struct rzip_files *rzip, char *path) {
+void files_addPath(struct rzip_files *rzip, char *path)
+{
 
 	struct folderTraversal *traversal = traverse_init(path);
 	while (traverse_iterate(traversal)) {
@@ -428,15 +433,13 @@ void files_addPath(struct rzip_files *rzip, char *path) {
 
 //				if (!S_ISLNK(traversal->folderEntryStat.st_mode)) {
 
-				struct rzip_file *rzip_file = createReadFileItem(rzip,
-						traversal);
+				struct rzip_file *rzip_file = createReadFileItem(rzip, traversal);
 
 				linkedList_add(rzip->rzip_files, rzip_file);
 
 				addPathOffsets(rzip, rzip_file);
 
-				printf("Input file=%s (%'ld)\n", rzip_file->filePath,
-						rzip_file->fileLength);
+				printf("Input file=%s (%'ld)\n", rzip_file->filePath, rzip_file->fileLength);
 //				} else {
 //
 //					printf("Skipping a link =%s\n", traversal->path);
@@ -479,7 +482,8 @@ void files_addPath(struct rzip_files *rzip, char *path) {
 /**
  * Initialize a structure.
  */
-struct rzip_files* files_initFiles() {
+struct rzip_files* files_initFiles()
+{
 
 	struct rzip_files *rzip_files = malloc(sizeof(struct rzip_files));
 	rzip_files->rzip_files = linkedList_init();
@@ -494,7 +498,8 @@ struct rzip_files* files_initFiles() {
 /**
  * Serialize a `struct rzip_file`, just fileLength and fileName
  */
-void rzip_file_serialize(void *rzip_file, int fileDescriptor) {
+void rzip_file_serialize(void *rzip_file, int fileDescriptor)
+{
 
 	struct rzip_file *serialize = rzip_file;
 
@@ -511,8 +516,7 @@ void rzip_file_serialize(void *rzip_file, int fileDescriptor) {
 		exit(1);
 	}
 
-	if (write(fileDescriptor, serialize->filePath, fileNameLength)
-			!= fileNameLength) {
+	if (write(fileDescriptor, serialize->filePath, fileNameLength) != fileNameLength) {
 		printf("Failed to write a fileName of a rzip_file\n");
 		exit(1);
 	}
@@ -522,7 +526,8 @@ void rzip_file_serialize(void *rzip_file, int fileDescriptor) {
 /**
  * Deserialize a `struct rzip_file`, just fileLength and fileName
  */
-struct rzip_file* rzip_file_deserialize(int fileDescriptor) {
+struct rzip_file* rzip_file_deserialize(int fileDescriptor)
+{
 
 	struct rzip_file *rzip_file = malloc(sizeof(struct rzip_file));
 
@@ -540,8 +545,7 @@ struct rzip_file* rzip_file_deserialize(int fileDescriptor) {
 	fileNameLength = le16toh(fileNameLength);
 
 	rzip_file->filePath = malloc(sizeof(char) * fileNameLength + 1);
-	if (read(fileDescriptor, rzip_file->filePath, fileNameLength)
-			!= fileNameLength) {
+	if (read(fileDescriptor, rzip_file->filePath, fileNameLength) != fileNameLength) {
 		printf("Failed to read a fileName of rzip_file\n");
 		exit(1);
 	}
@@ -555,21 +559,19 @@ struct rzip_file* rzip_file_deserialize(int fileDescriptor) {
 /**
  * Serialize `struct rzip_files`
  */
-void files_serialize(struct rzip_files *rzipFiles, int fileDescriptor) {
+void files_serialize(struct rzip_files *rzipFiles, int fileDescriptor)
+{
 
-	linkedList_serialize(rzipFiles->rzip_files, fileDescriptor,
-			&rzip_file_serialize);
+	linkedList_serialize(rzipFiles->rzip_files, fileDescriptor, &rzip_file_serialize);
 
 }
 
-
-
 /**
  * comparator for a binarySearchTree of type `struct rzip_file *`
- * Comparing based on of offset of a file
+ * Comparing based on offset of a file
  */
-static int rzip_file_binary_tree_comparator(struct rzip_file *file1,
-		struct rzip_file *file2) {
+static int rzip_file_binary_tree_comparator_node(struct rzip_file *file1, struct rzip_file *file2)
+{
 
 	int64_t *first = &file1->dataOffset;
 	int64_t *second = &file2->dataOffset;
@@ -580,23 +582,41 @@ static int rzip_file_binary_tree_comparator(struct rzip_file *file1,
 }
 
 /**
+ * comparator for a value and a binarySearchTree of type `struct rzip_file *`
+ * Comparing based on offset of a file
+ */
+static int rzip_file_binary_tree_comparator_search(int64_t *value, struct rzip_file *file2)
+{
+	// if value is in range, return 0
+	// if value is before range, return -1
+	// if value is after range, return 1
+	return *value < file2->dataOffset ? -1 : *value >= file2->dataEndByte ? 1 : 0;
+}
+
+/**
  * Generate a binary search tree from sorted `struct rzip_file`
  */
-static void generateBinarySearchTree(struct rzip_files *rzipFiles) {
+static void generateBinarySearchTree(struct rzip_files *rzipFiles)
+{
 
-	rzipFiles->decompressionTree=binarySearchTree_init(
-			&rzip_file_binary_tree_comparator, rzipFiles->rzip_files);
-
+	// only use binary search tree if there is "huge amount" of files
+	// try to guess, what is the threshold value
+	if(linkedList_count(rzipFiles->rzip_files)>20) {
+		printf("Using a binary search tree to search segments\n");
+		rzipFiles->decompressionTree = binarySearchTree_init(&rzip_file_binary_tree_comparator_node, &rzip_file_binary_tree_comparator_search, rzipFiles->rzip_files);
+	} else {
+		printf("Using a linked list to search segments\n");
+		rzipFiles->decompressionTree=NULL;
+	}
 }
 
 /**
  * Deserialize `struct rzip_files` into a linkedList
  */
-struct rzip_files* files_deserialize(struct rzip_files *rzipFiles,
-		int fileDescriptor) {
+struct rzip_files* files_deserialize(struct rzip_files *rzipFiles, int fileDescriptor)
+{
 
-	rzipFiles->rzip_files = linkedList_deserialize(fileDescriptor,
-			(void*) &rzip_file_deserialize);
+	rzipFiles->rzip_files = linkedList_deserialize(fileDescriptor, (void*) &rzip_file_deserialize);
 
 	// post process a data
 	struct linked_list_item *listItem = rzipFiles->rzip_files->start;
@@ -614,11 +634,11 @@ struct rzip_files* files_deserialize(struct rzip_files *rzipFiles,
 
 }
 
-
 /**
  * Prepare an output files for a decompression
  */
-static void prepareOutputFiles(struct rzip_files *rzip_files) {
+static void prepareOutputFiles(struct rzip_files *rzip_files)
+{
 
 	struct linked_list_item *listItem = rzip_files->rzip_files->start;
 	struct rzip_file *rzip_file;
@@ -633,7 +653,8 @@ static void prepareOutputFiles(struct rzip_files *rzip_files) {
 	rzip_files->tmpOffset = 0;
 }
 
-static void updateDestinationPath(struct rzip_files *rzip_files) {
+static void updateDestinationPath(struct rzip_files *rzip_files)
+{
 
 	int64_t len = strlen(rzip_files->basePath);
 
@@ -649,13 +670,14 @@ static void updateDestinationPath(struct rzip_files *rzip_files) {
 
 }
 
-void files_prepareDecompression(struct rzip_files *rzip_files) {
+void files_prepareDecompression(struct rzip_files *rzip_files)
+{
 
 	updateDestinationPath(rzip_files);
 	prepareOutputFiles(rzip_files);
 
 	// initialize te first buffer
-	files_mmapOffset(rzip_files->lowBuffer, 0);
+	//files_mmapOffset(rzip_files->lowBuffer, 0);
 
 }
 
@@ -791,11 +813,27 @@ int64_t remap_count = 0;
 //
 //	return NULL;
 //}
+
 /**
  * find first mapping file based on binary search tree
  */
-inline static struct linked_list_item* findFirstMappingFile(
-		struct rzip_files_buffer *buffer, int64_t offset) {
+inline static struct rzip_file* findFirstMappingFileTree(struct rzip_files_buffer *buffer, int64_t offset)
+{
+
+	struct rzip_file *rzip_fileItem = binarySearchTree_search(buffer->origin->decompressionTree, &offset);
+	if (rzip_fileItem != NULL) {
+		return rzip_fileItem;
+	}
+
+	printf("FATAL input buffer %lu out of range!\n", offset);
+	exit(1);
+}
+
+/**
+ * find first mapping file based on linked list
+ */
+inline static struct rzip_file* findFirstMappingFileLink(struct rzip_files_buffer *buffer, int64_t offset)
+{
 
 	struct linked_list_item *listItem = buffer->origin->rzip_files->start;
 //	buffer->rzip_files->start = NULL;
@@ -809,7 +847,7 @@ inline static struct linked_list_item* findFirstMappingFile(
 
 			// found a start
 //			buffer->rzip_files->start = listItem;
-			return listItem;
+			return rzip_fileItem;
 		}
 
 		// move to the next file in the list
@@ -826,26 +864,35 @@ inline static struct linked_list_item* findFirstMappingFile(
  * Remmap of files which are already mapped.
  */
 
-inline void files_mapCached(struct rzip_files_buffer *buffer, int64_t offset) {
+inline void files_mapCached(struct rzip_files_buffer *buffer, int64_t offset)
+{
 
 //	printf("Freeing buffer %s %d-%d\n", buffer->name, buffer->offset,
 //			buffer->end);
 
 	remap_count++;
-	struct linked_list_item *rzip_file = findFirstMappingFile(buffer, offset);
 
-	struct rzip_file *rzip_fileItem = rzip_file->item;
+	struct rzip_file *rzip_fileItem;
+
+	// if there are just a few items, use findFirstMappingFileLink
+	// TODO: use a function reference as there is no need to test which impl to use
+	if(buffer->origin->decompressionTree!=NULL) {
+
+		rzip_fileItem = findFirstMappingFileTree(buffer, offset);
+	} else {
+
+		rzip_fileItem = findFirstMappingFileLink(buffer, offset);
+	}
 
 	buffer->buffer = rzip_fileItem->preMappedFile;
 	buffer->offset = rzip_fileItem->dataOffset;
 	buffer->length = rzip_fileItem->fileLength;
-	buffer->end =  buffer->offset + buffer->length;
-	buffer->rzip_file=rzip_file;
+	buffer->end = buffer->offset + buffer->length;
+	//buffer->rzip_file=rzip_file;
 
 //	printf("Mapping buffer %s %d-%d, %d\n", buffer->name, buffer->offset,
 //			buffer->end, offset);
 }
-
 
 //void mmapx(struct rzip_files_buffer *buffer, i64 offset) {
 //
@@ -855,11 +902,10 @@ inline void files_mapCached(struct rzip_files_buffer *buffer, int64_t offset) {
 //mmap(__addr, __len, /*__prot*/PROT_READ, /*__flags*/MAP_SHARED, __fd, __offset);
 //}
 
-struct rzip_files_buffer* files_init_rzip_files_buffer(
-		struct rzip_files *rzip_files) {
+struct rzip_files_buffer* files_init_rzip_files_buffer(struct rzip_files *rzip_files)
+{
 
-	struct rzip_files_buffer *rzip_files_buffer = malloc(
-			sizeof(struct rzip_files_buffer));
+	struct rzip_files_buffer *rzip_files_buffer = malloc(sizeof(struct rzip_files_buffer));
 
 	if (rzip_files_buffer == MAP_FAILED) {
 
@@ -876,8 +922,8 @@ struct rzip_files_buffer* files_init_rzip_files_buffer(
 	return rzip_files_buffer;
 }
 
-inline bool files_isinBuffer(struct rzip_files_buffer *filesBuffer,
-		int64_t offset) {
+inline bool files_isinBuffer(struct rzip_files_buffer *filesBuffer, int64_t offset)
+{
 
 	return filesBuffer->offset <= offset && offset < filesBuffer->end;
 }
@@ -887,7 +933,8 @@ inline bool files_isinBuffer(struct rzip_files_buffer *filesBuffer,
  * `buffer` - use this buffer to mmap offset `offset`,
  * unmap a buffer when needed
  */
-inline struct rzip_files_buffer* files_mmapOffset(struct rzip_files_buffer *buffer, int64_t offset) {
+inline struct rzip_files_buffer* files_mmapOffset(struct rzip_files_buffer *buffer, int64_t offset)
+{
 
 	if (!files_isinBuffer(buffer, offset)) {
 
@@ -899,33 +946,34 @@ inline struct rzip_files_buffer* files_mmapOffset(struct rzip_files_buffer *buff
 	return buffer;
 }
 
-/**
- * Use a next file in an order,
- * because a lower buffer is sliding continuous buffer moving from start to the end
- */
-void files_remapLower(struct rzip_files_buffer *buffer, int64_t offset) {
+///**
+// * Use a next file in an order,
+// * because a lower buffer is sliding continuous buffer moving from start to the end
+// */
+//void files_remapLower(struct rzip_files_buffer *buffer, int64_t offset) {
+//
+//	if( buffer->offset <= offset) {
+//
+//		if(offset >= buffer->end) {
+//
+//			//remap, use a next item
+//			//struct linked_list_item *rzip_file = buffer->rzip_file->next;
+//
+//			buffer->rzip_file=buffer->rzip_file->next;
+//			//struct rzip_file *rzip_fileItem = rzip_file->item;
+//
+//			files_mapRzipItemToBuffer(buffer, buffer->rzip_file->item);
+//		}
+//
+//	} else {
+//
+//		printf("lower buffer not contiguous");
+//		exit(1);
+//	}
+//}
 
-	if( buffer->offset <= offset) {
-
-		if(offset >= buffer->end) {
-
-			//remap, use a next item
-			//struct linked_list_item *rzip_file = buffer->rzip_file->next;
-
-			buffer->rzip_file=buffer->rzip_file->next;
-			//struct rzip_file *rzip_fileItem = rzip_file->item;
-
-			files_mapRzipItemToBuffer(buffer, buffer->rzip_file->item);
-		}
-
-	} else {
-
-		printf("lower buffer not contiguous");
-		exit(1);
-	}
-}
-
-inline void files_mapRzipItemToBuffer(struct rzip_files_buffer *buffer, struct rzip_file *rzip_fileItem) {
+inline void files_mapRzipItemToBuffer(struct rzip_files_buffer *buffer, struct rzip_file *rzip_fileItem)
+{
 
 //	printf("Freeing buffer %s %d-%d\n", buffer->name, buffer->offset,
 //			buffer->end);
@@ -936,19 +984,18 @@ inline void files_mapRzipItemToBuffer(struct rzip_files_buffer *buffer, struct r
 	buffer->buffer = rzip_fileItem->preMappedFile;
 	buffer->offset = rzip_fileItem->dataOffset;
 	buffer->length = rzip_fileItem->fileLength;
-	buffer->end =  buffer->offset + buffer->length;
+	buffer->end = buffer->offset + buffer->length;
 	//buffer->rzip_file=rzip_file;
 
 //	printf("Mapping buffer %s %d-%d, %d\n", buffer->name, buffer->offset,
 //			buffer->end, offset);
 }
 
-
 /**
  * Read a byte from concatenated input on offset `offset`
  */
-inline uint8_t files_getDirectBufferByte(struct rzip_files_buffer *buffer,
-		int64_t offset) {
+inline uint8_t files_getDirectBufferByte(struct rzip_files_buffer *buffer, int64_t offset)
+{
 
 	//int64_t delta = offset - buffer->offset;
 //	if (delta < 0 || delta >= buffer->length) {
@@ -960,7 +1007,8 @@ inline uint8_t files_getDirectBufferByte(struct rzip_files_buffer *buffer,
 	return buffer->buffer[offset - buffer->offset];
 }
 
-inline uint8_t files_getManagedBufferByte(struct rzip_files_buffer *buffer, int64_t offset) {
+inline uint8_t files_getManagedBufferByte(struct rzip_files_buffer *buffer, int64_t offset)
+{
 
 	files_mmapOffset(buffer, offset);
 //	int64_t delta = offset - buffer->offset;
@@ -988,7 +1036,8 @@ inline uint8_t files_getManagedBufferByte(struct rzip_files_buffer *buffer, int6
 /**
  * Create a name ".files"
  */
-char* files_createFilesHolderName(char *outFileName) {
+char* files_createFilesHolderName(char *outFileName)
+{
 
 	// .files
 	return concatStrings(outFileName, ".files");
@@ -997,7 +1046,8 @@ char* files_createFilesHolderName(char *outFileName) {
 /**
  * Close file handles and free allocated memory
  */
-static void cleanupFile(struct linked_list_item *listItem, void *rzip_file_void) {
+static void cleanupFile(struct linked_list_item *listItem, void *rzip_file_void)
+{
 
 	struct rzip_file *rzip_file = rzip_file_void;
 
@@ -1019,7 +1069,8 @@ static void cleanupFile(struct linked_list_item *listItem, void *rzip_file_void)
 	}
 }
 
-void files_cleanupFiles(struct rzip_files *rzip_files) {
+void files_cleanupFiles(struct rzip_files *rzip_files)
+{
 
 	linkedList_cleanup(rzip_files->rzip_files, &cleanupFile);
 
@@ -1032,7 +1083,8 @@ void files_cleanupFiles(struct rzip_files *rzip_files) {
 /**
  * Get length of longest common prefix of two strings
  */
-static int64_t getLongestPrefixLength(char *first, char *second) {
+static int64_t getLongestPrefixLength(char *first, char *second)
+{
 
 	int64_t i = 0;
 	int64_t lastPathIndex = 0;
@@ -1056,8 +1108,10 @@ static int64_t getLongestPrefixLength(char *first, char *second) {
 
 /**
  * Get all files which have to be compressed and identify their longest common prefix path
+ * TODO: rewrite it to support multiple base paths for each input folder
  */
-static void resolveBasePath(struct rzip_files *rzip_files) {
+static void resolveBasePath(struct rzip_files *rzip_files)
+{
 
 	struct linked_list_item *item = rzip_files->rzip_files->start;
 	struct rzip_file *rzip_file;
@@ -1065,49 +1119,46 @@ static void resolveBasePath(struct rzip_files *rzip_files) {
 	char *lastPath = NULL;
 	int64_t longest = -1;
 
-	char *parent;
-	char *parent2;
-
 	while (item != NULL) {
 
 		rzip_file = item->item;
 
-		parent = strdup(rzip_file->filePath);
-		parent2 = dirname(parent);
-
 		if (lastPath != NULL) {
-			longest = files_min(getLongestPrefixLength(lastPath, parent2),
-					longest);
+			longest = files_min(getLongestPrefixLength(lastPath, rzip_file->filePath), longest);
 		} else {
 
-			// first inialization
-			longest = strlen(parent2);
+			// first initialization
+			lastPath = strdup(rzip_file->filePath);
+
+			// identify last folder delimiter
+			for(longest=strlen(lastPath)-1;longest>=0;longest--) {
+
+				if(lastPath[longest]=='/') {
+					break;
+				}
+			}
+
+
 		}
 
-		lastPath = strdup(parent2);
-
-		free(parent);
+		// end of string
+		lastPath[longest+1]=0;
 
 		item = item->next;
 	}
 
 	if (longest > 0) {
 
-		rzip_files->basePath = malloc(sizeof(char) * longest + 1);
-		strncpy(rzip_files->basePath, lastPath, longest);
-		rzip_files->basePath[longest] = 0;
+		rzip_files->basePath = lastPath;
 	} else {
 
 		rzip_files->basePath = "";
-	}
-
-	if (lastPath != NULL) {
 		free(lastPath);
 	}
-
 }
 
-static void relativizeFilePaths(struct rzip_files *rzip_files) {
+static void relativizeFilePaths(struct rzip_files *rzip_files)
+{
 
 	struct linked_list_item *item = rzip_files->rzip_files->start;
 	struct rzip_file *rzip_file;
@@ -1131,13 +1182,17 @@ static void relativizeFilePaths(struct rzip_files *rzip_files) {
 /**
  * All files to be compressed were added, make a pre-compression preparation.
  */
-void files_prepareCompression(struct rzip_files *rzip_files) {
+void files_prepareCompression(struct rzip_files *rzip_files)
+{
 
 	resolveBasePath(rzip_files);
 	relativizeFilePaths(rzip_files);
+
+	generateBinarySearchTree(rzip_files);
 }
 
-inline int64_t files_min(int64_t a, int64_t b) {
+inline int64_t files_min(int64_t a, int64_t b)
+{
 
 	if (a < b) {
 		return a;
@@ -1145,7 +1200,8 @@ inline int64_t files_min(int64_t a, int64_t b) {
 	return b;
 }
 
-inline int64_t files_max(int64_t a, int64_t b) {
+inline int64_t files_max(int64_t a, int64_t b)
+{
 
 	if (a > b) {
 		return a;

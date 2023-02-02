@@ -118,10 +118,10 @@ static char* concatPath(struct folderTraversal *traversal, char *parent,
 	mergedPath[parentLen] = '/';
 	strcpy(mergedPath + parentLen + 1, child);
 
-	char *canonicalPath = strdup(
-			normalizePath(traversal->currentFolder, mergedPath,
-					traversal->canonicalPath));
-//	char *canonicalPath=realpath(mergedPath, NULL);
+//	char *canonicalPath = strdup(
+//			normalizePath(traversal->currentFolder, mergedPath,
+//					traversal->canonicalPath));
+	char *canonicalPath=realpath(mergedPath, NULL);
 
 	free(mergedPath);
 	return canonicalPath;

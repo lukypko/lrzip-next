@@ -791,7 +791,7 @@ int main(int argc, char *argv[]) {
 //	stack_test1();
 //	folder_test1();
 
-	binarySearchTree_test1();
+	//binarySearchTree_test1();
 
 
 	struct rzip_files *rzip_files = files_initFiles();

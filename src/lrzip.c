@@ -1638,8 +1638,8 @@ bool decompress_file(rzip_control *control)
 		if (unlikely(close(fd_hist) || close(fd_out)))
 			fatal("Failed to close files\n");
 
-	if (unlikely(!STDIN && !STDOUT && !TEST_ONLY && !preserve_times(control, fd_in)))
-		return false;
+//	if (unlikely(!STDIN && !STDOUT && !TEST_ONLY && !preserve_times(control, fd_in)))
+//		return false;
 
 	if ( !STDIN )
 		close(fd_in);
