@@ -258,10 +258,22 @@ static struct rzip_file* createReadFileItem(struct rzip_files *rzip,
 	return fileItem;
 }
 
+static void createDestinationFolder(char *filePath) {
+
+	char *folderPath = strdup(filePath);
+	char *folderPath2=dirname(folderPath);
+
+	mkdir(folderPath2, 0777);
+
+	free(folderPath);
+}
+
 static void createWriteFileItem(struct rzip_files *rzip,
 		struct rzip_file *fileItem) {
 
 	char *filePath = concatStrings(rzip->basePath, fileItem->filePath);
+
+	createDestinationFolder(filePath);
 
 	int fd_out = open(filePath,
 	O_RDWR | O_CREAT | O_TRUNC/*| O_EXCL*/, 0666);
@@ -834,23 +846,6 @@ inline void files_mapCached(struct rzip_files_buffer *buffer, int64_t offset) {
 //			buffer->end, offset);
 }
 
-inline void files_mapRzipItemToBuffer(struct rzip_files_buffer *buffer, struct rzip_file *rzip_fileItem) {
-
-//	printf("Freeing buffer %s %d-%d\n", buffer->name, buffer->offset,
-//			buffer->end);
-
-	remap_count++;
-//	struct linked_list_item *rzip_file = findFirstMappingFile(buffer, offset);
-
-	buffer->buffer = rzip_fileItem->preMappedFile;
-	buffer->offset = rzip_fileItem->dataOffset;
-	buffer->length = rzip_fileItem->fileLength;
-	buffer->end =  buffer->offset + buffer->length;
-	//buffer->rzip_file=rzip_file;
-
-//	printf("Mapping buffer %s %d-%d, %d\n", buffer->name, buffer->offset,
-//			buffer->end, offset);
-}
 
 //void mmapx(struct rzip_files_buffer *buffer, i64 offset) {
 //
@@ -884,8 +879,7 @@ struct rzip_files_buffer* files_init_rzip_files_buffer(
 inline bool files_isinBuffer(struct rzip_files_buffer *filesBuffer,
 		int64_t offset) {
 
-	return /*filesBuffer->buffer != NULL && */filesBuffer->offset <= offset
-			&& offset < filesBuffer->end;
+	return filesBuffer->offset <= offset && offset < filesBuffer->end;
 }
 
 /**
@@ -893,7 +887,7 @@ inline bool files_isinBuffer(struct rzip_files_buffer *filesBuffer,
  * `buffer` - use this buffer to mmap offset `offset`,
  * unmap a buffer when needed
  */
-void files_mmapOffset(struct rzip_files_buffer *buffer, int64_t offset) {
+inline struct rzip_files_buffer* files_mmapOffset(struct rzip_files_buffer *buffer, int64_t offset) {
 
 	if (!files_isinBuffer(buffer, offset)) {
 
@@ -902,6 +896,7 @@ void files_mmapOffset(struct rzip_files_buffer *buffer, int64_t offset) {
 		files_mapCached(buffer, offset);
 	}
 
+	return buffer;
 }
 
 /**
@@ -921,8 +916,6 @@ void files_remapLower(struct rzip_files_buffer *buffer, int64_t offset) {
 			//struct rzip_file *rzip_fileItem = rzip_file->item;
 
 			files_mapRzipItemToBuffer(buffer, buffer->rzip_file->item);
-
-
 		}
 
 	} else {
@@ -932,20 +925,52 @@ void files_remapLower(struct rzip_files_buffer *buffer, int64_t offset) {
 	}
 }
 
+inline void files_mapRzipItemToBuffer(struct rzip_files_buffer *buffer, struct rzip_file *rzip_fileItem) {
+
+//	printf("Freeing buffer %s %d-%d\n", buffer->name, buffer->offset,
+//			buffer->end);
+
+	remap_count++;
+//	struct linked_list_item *rzip_file = findFirstMappingFile(buffer, offset);
+
+	buffer->buffer = rzip_fileItem->preMappedFile;
+	buffer->offset = rzip_fileItem->dataOffset;
+	buffer->length = rzip_fileItem->fileLength;
+	buffer->end =  buffer->offset + buffer->length;
+	//buffer->rzip_file=rzip_file;
+
+//	printf("Mapping buffer %s %d-%d, %d\n", buffer->name, buffer->offset,
+//			buffer->end, offset);
+}
+
+
 /**
  * Read a byte from concatenated input on offset `offset`
  */
 inline uint8_t files_getDirectBufferByte(struct rzip_files_buffer *buffer,
 		int64_t offset) {
 
-	int64_t delta = offset - buffer->offset;
+	//int64_t delta = offset - buffer->offset;
 //	if (delta < 0 || delta >= buffer->length) {
 //
 //		printf("Out of buffer index!!!\n");
 //		exit(1);
 //		//fatal("Out of buffer index\n");
 //	}
-	return buffer->buffer[delta];
+	return buffer->buffer[offset - buffer->offset];
+}
+
+inline uint8_t files_getManagedBufferByte(struct rzip_files_buffer *buffer, int64_t offset) {
+
+	files_mmapOffset(buffer, offset);
+//	int64_t delta = offset - buffer->offset;
+//	if (delta < 0 || delta >= buffer->length) {
+//
+//		printf("Out of buffer index!!!\n");
+//		exit(1);
+//		//fatal("Out of buffer index\n");
+//	}
+	return buffer->buffer[offset - buffer->offset];
 }
 
 ///**
@@ -1041,24 +1066,25 @@ static void resolveBasePath(struct rzip_files *rzip_files) {
 	int64_t longest = -1;
 
 	char *parent;
+	char *parent2;
 
 	while (item != NULL) {
 
 		rzip_file = item->item;
 
 		parent = strdup(rzip_file->filePath);
-		parent = dirname(parent);
+		parent2 = dirname(parent);
 
 		if (lastPath != NULL) {
-			longest = files_min(getLongestPrefixLength(lastPath, parent),
+			longest = files_min(getLongestPrefixLength(lastPath, parent2),
 					longest);
 		} else {
 
 			// first inialization
-			longest = strlen(parent);
+			longest = strlen(parent2);
 		}
 
-		lastPath = strdup(parent);
+		lastPath = strdup(parent2);
 
 		free(parent);
 

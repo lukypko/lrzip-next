@@ -234,7 +234,7 @@ static i64 unzip_match(rzip_control *control, void *ss, i64 len, int chunk_bytes
 	if (unlikely(!buf))
 		fatal("Failed to malloc match buffer of size %'"PRId64"\n", len);
 
-	if (unlikely(fileCache_readRange(control->rzip_files, buf, deltaOffset, n) != (ssize_t)n)) {
+	if (unlikely(fileCache_readRange(control, buf, deltaOffset, n) != (ssize_t)n)) {
 
 //	if (unlikely(read_fdhist(control, buf, (size_t)n) != (ssize_t)n)) {
 		dealloc(buf);

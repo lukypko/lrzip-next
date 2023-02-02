@@ -1484,8 +1484,8 @@ bool decompress_file(rzip_control *control)
 				strcpy(control->outfile, tmpoutfile);
 		}
 
-		if (!STDOUT)
-			print_progress("Output filename is: %s\n", control->outfile);
+//		if (!STDOUT)
+//			print_progress("Output filename is: %s\n", control->outfile);
 
 		if (unlikely(!strcmp(control->outfile, infilecopy))) {
 			control->flags |= FLAG_TEST_ONLY;	// stop and no more decompres or deleting files.
@@ -1509,44 +1509,44 @@ bool decompress_file(rzip_control *control)
 	}
 	control->fd_in = fd_in;
 
-	if (!(TEST_ONLY || STDOUT)) {
-		fd_out = open(control->outfile, O_WRONLY | O_CREAT | O_EXCL, 0666);
-		if (FORCE_REPLACE && (-1 == fd_out) && (EEXIST == errno)) {
-			if (unlikely(unlink(control->outfile)))
-				fatal("Failed to unlink an existing file: %s\n", control->outfile);
-			fd_out = open(control->outfile, O_WRONLY | O_CREAT | O_EXCL, 0666);
-		}
-		if (unlikely(fd_out == -1)) {
-			/* We must ensure we don't delete a file that already
-			 * exists just because we tried to create a new one */
-			control->flags |= FLAG_KEEP_BROKEN;
-			fatal("Failed to create %s\n", control->outfile);
-		}
-		fd_hist = open(control->outfile, O_RDONLY);
-		if (unlikely(fd_hist == -1))
-			fatal("Failed to open history file %s\n", control->outfile);
-
-		/* Can't copy permissions from STDIN */
-		if (!STDIN)
-			if (unlikely(!preserve_perms(control, fd_in, fd_out)))
-				return false;
-	} else {
-		fd_out = open_tmpoutfile(control);
-		if (fd_out == -1) {
-			fd_hist = -1;
-		} else {
-			fd_hist = open(control->outfile, O_RDONLY);
-			if (unlikely(fd_hist == -1))
-				fatal("Failed to open history file %s\n", control->outfile);
-			/* Unlink temporary file as soon as possible */
-			if (unlikely(unlink(control->outfile)))
-				fatal("Failed to unlink tmpfile: %s\n", control->outfile);
-		}
-	}
+//	if (!(TEST_ONLY || STDOUT)) {
+//		fd_out = open(control->outfile, O_WRONLY | O_CREAT | O_EXCL, 0666);
+//		if (FORCE_REPLACE && (-1 == fd_out) && (EEXIST == errno)) {
+//			if (unlikely(unlink(control->outfile)))
+//				fatal("Failed to unlink an existing file: %s\n", control->outfile);
+//			fd_out = open(control->outfile, O_WRONLY | O_CREAT | O_EXCL, 0666);
+//		}
+//		if (unlikely(fd_out == -1)) {
+//			/* We must ensure we don't delete a file that already
+//			 * exists just because we tried to create a new one */
+//			control->flags |= FLAG_KEEP_BROKEN;
+//			fatal("Failed to create %s\n", control->outfile);
+//		}
+//		fd_hist = open(control->outfile, O_RDONLY);
+//		if (unlikely(fd_hist == -1))
+//			fatal("Failed to open history file %s\n", control->outfile);
+//
+//		/* Can't copy permissions from STDIN */
+//		if (!STDIN)
+//			if (unlikely(!preserve_perms(control, fd_in, fd_out)))
+//				return false;
+//	} else {
+//		fd_out = open_tmpoutfile(control);
+//		if (fd_out == -1) {
+//			fd_hist = -1;
+//		} else {
+//			fd_hist = open(control->outfile, O_RDONLY);
+//			if (unlikely(fd_hist == -1))
+//				fatal("Failed to open history file %s\n", control->outfile);
+//			/* Unlink temporary file as soon as possible */
+//			if (unlikely(unlink(control->outfile)))
+//				fatal("Failed to unlink tmpfile: %s\n", control->outfile);
+//		}
+//	}
 
 // check for STDOUT removed. In memory compression speedup. No memory leak.
-	if (unlikely(!open_tmpoutbuf(control)))
-		return false;
+//	if (unlikely(!open_tmpoutbuf(control)))
+//		return false;
 
 	if (!STDIN) {
 		if (unlikely(!read_magic(control, fd_in, &expected_size)))
@@ -1558,8 +1558,8 @@ bool decompress_file(rzip_control *control)
 	if (!STDOUT) {
 		/* Check if there's enough free space on the device chosen to fit the
 		* decompressed or test file. */
-		if (unlikely(fstatvfs(fd_out, &fbuf)))
-			fatal("Failed to fstatvfs in decompress_file\n");
+//		if (unlikely(fstatvfs(fd_out, &fbuf)))
+//			fatal("Failed to fstatvfs in decompress_file\n");
 		free_space = (i64)fbuf.f_bsize * (i64)fbuf.f_bavail;
 		if (free_space < expected_size) {
 			if (FORCE_REPLACE && !TEST_ONLY)
@@ -1622,8 +1622,8 @@ bool decompress_file(rzip_control *control)
 
 	/* if we get here, no fatal_return(( errors during decompression */
 	print_progress("\r");
-	if (!(STDOUT || TEST_ONLY))
-		print_progress("Output filename is: %s: ", control->outfile);
+//	if (!(STDOUT || TEST_ONLY))
+//		print_progress("Output filename is: %s: ", control->outfile);
 	if (!expected_size)
 		expected_size = control->st_size;
 	if (!ENCRYPT)

@@ -36,6 +36,22 @@ struct rzip_files {
 	 */
 	struct rzip_files_buffer *highBuffer;
 
+
+	struct rzip_files_buffer *bufferMatchLen1;
+	struct rzip_files_buffer *bufferMatchLen2;
+	struct rzip_files_buffer *bufferMatchLen3;
+	struct rzip_files_buffer *bufferMatchLen4;
+
+	struct rzip_files_buffer *bufferReadRange;
+
+	struct rzip_files_buffer *bufferNextTag1;
+	struct rzip_files_buffer *bufferNextTag2;
+
+	struct rzip_files_buffer *bufferFullTag;
+
+
+
+
 	/**
 	 * List of files/regexp which have to be extracted from archive
 	 * linked_list of `char*`
@@ -225,10 +241,10 @@ struct rzip_files_buffer* files_init_rzip_files_buffer(
 bool files_isinBuffer(struct rzip_files_buffer *buffer,
 		int64_t offset);
 
-void files_mmapOffset(struct rzip_files_buffer *buffer,
-		int64_t offset);
+struct rzip_files_buffer* files_mmapOffset(struct rzip_files_buffer *buffer, int64_t offset);
 
 uint8_t files_getDirectBufferByte(struct rzip_files_buffer *buffer, int64_t offset);
+uint8_t files_getManagedBufferByte(struct rzip_files_buffer *buffer, int64_t offset);
 
 
 void files_mapCached(struct rzip_files_buffer *buffer,

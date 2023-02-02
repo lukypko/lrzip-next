@@ -567,7 +567,7 @@ struct rzip_control {
 
 	char chunk_bytes;
 //	struct sliding_buffer sb;
-	i64 (*do_mcpy)(struct rzip_files *, unsigned char *, i64, i64);
+	i64 (*do_mcpy)(rzip_control *control, unsigned char *, i64, i64);
 	void (*next_tag)(rzip_control *, struct rzip_state *, i64, tag *);
 	tag (*full_tag)(rzip_control *, struct rzip_state *, i64);
 	i64 (*match_len)(rzip_control *, struct rzip_state *, i64, i64, i64, i64 *);

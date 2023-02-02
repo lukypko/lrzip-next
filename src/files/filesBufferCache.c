@@ -19,6 +19,19 @@ void fileCache_init(struct rzip_files *rzip_files) {
 
 	rzip_files->highBuffer = files_init_rzip_files_buffer(rzip_files);
 	rzip_files->highBuffer->name = "high";
+
+
+	rzip_files->bufferMatchLen1 = files_init_rzip_files_buffer(rzip_files);
+	rzip_files->bufferMatchLen2 = files_init_rzip_files_buffer(rzip_files);
+	rzip_files->bufferMatchLen3 = files_init_rzip_files_buffer(rzip_files);
+	rzip_files->bufferMatchLen4 = files_init_rzip_files_buffer(rzip_files);
+
+	rzip_files->bufferReadRange= files_init_rzip_files_buffer(rzip_files);
+
+	rzip_files->bufferNextTag1= files_init_rzip_files_buffer(rzip_files);
+	rzip_files->bufferNextTag2= files_init_rzip_files_buffer(rzip_files);
+
+	rzip_files->bufferFullTag= files_init_rzip_files_buffer(rzip_files);
 }
 
 inline struct rzip_files_buffer* fileCache_remapBuffer(struct rzip_files *rzip_files, int64_t offset) {
@@ -43,11 +56,10 @@ uint64_t fileCache_readRange_count = 0;
 /**
  * read (copy) input data range of `offset` and `len` to a buffer `destinationBuffer`
  */
-int64_t fileCache_readRange(struct rzip_files *rzip_files,
+int64_t fileCache_readRange(rzip_control *control,
 		uint8_t *destinationBuffer, int64_t offset, int64_t len) {
 
-// TODO: this is a low performance implementation
-
+	//struct rzip_files *rzip_files=control->rzip_files;
 	fileCache_readRange_count++;
 
 
@@ -68,12 +80,16 @@ int64_t fileCache_readRange(struct rzip_files *rzip_files,
 	for (i = 0; i < len;) {
 
 		sourceAddr = offset + i;
-		struct rzip_files_buffer *buffer = fileCache_remapBuffer(rzip_files, sourceAddr);
+		files_mmapOffset(control->rzip_files->bufferReadRange, sourceAddr);
+		//struct rzip_files_buffer *buffer = fileCache_remapBuffer(rzip_files, sourceAddr);
 
-		int64_t start = sourceAddr - buffer->offset;
-		int64_t availableBuffer = files_min(buffer->end - sourceAddr, len - i);
+		int64_t start = sourceAddr - control->rzip_files->bufferReadRange->offset;
+		int64_t availableBuffer = files_min(control->rzip_files->bufferReadRange->end - sourceAddr, len - i);
+		if(availableBuffer==0) {
+			printf("fileCache_readRange: availableBuffer==0\n");
+		}
 
-		memcpy(destinationBuffer + i, buffer->buffer + start, availableBuffer);
+		memcpy(destinationBuffer + i, control->rzip_files->bufferReadRange->buffer + start, availableBuffer);
 		i += availableBuffer;
 	}
 

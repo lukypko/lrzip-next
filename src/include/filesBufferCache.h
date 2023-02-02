@@ -4,7 +4,7 @@
 #ifndef SRC_FILES_BUFFER_CACHE_H_
 #define SRC_FILES_BUFFER_CACHE_H_
 
-//#include "lrzip_private.h"
+#include "lrzip_private.h"
 #include "files.h"
 #include <stdbool.h>
 
@@ -18,7 +18,7 @@ uint8_t fileCache_getByte(struct rzip_files *rzip_files, int64_t offset);
 /**
  * copy input data range of `offset` and `len` to a buffer `destinationBuffer`
  */
-int64_t fileCache_readRange(struct rzip_files *rzip_files,
+int64_t fileCache_readRange(rzip_control *control,
 		uint8_t *destinationBuffer, int64_t offset, int64_t len);
 
 int64_t fileCache_writeRange(struct rzip_files *rzip_files,
