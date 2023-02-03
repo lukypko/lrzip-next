@@ -165,6 +165,25 @@ void setup_overhead(rzip_control *control)
 			}
 		}
 		control->overhead = (i64) (1 << control->zpaq_bs) * ONE_MB;	// times 8 or 16. Out for now
+	} else if(BZIP3_COMPRESS) {
+		/* if block size property 0-8 not set...*/
+		if (control->bzip3_block_size == 0)
+			control->bzip3_bs = control->compression_level - 1;
+
+		/* Compression Level and Block Size Computation
+		 * 1 = 32MB
+		 * 2 = 48MB
+		 * 3 = 64MB
+		 * 4 = 96MB
+		 * 5 = 128MB
+		 * 6 = 196MB
+		 * 7 = 256MB
+		 * 8 = 384MB
+		 * 9 = 512MB-1
+		 */
+		/* compute actual block size */
+		control->bzip3_block_size = BZIP3_BLOCK_SIZE_FROM_PROP(control->bzip3_bs);
+		control->overhead = (i64) control->bzip3_block_size * 6;
 	}
 
 	/* no need for zpaq computation here. do in open_stream_out() */
@@ -277,6 +296,8 @@ bool read_config(rzip_control *control)
 				control->flags |= FLAG_NO_COMPRESS;
 			else if (isparameter(parametervalue, "zpaq"))
 				control->flags |= FLAG_ZPAQ_COMPRESS;
+			else if (isparameter(parametervalue, "bzip3"))
+				control->flags |= FLAG_BZIP3_COMPRESS;
 			else if (!isparameter(parametervalue, "lzma")) /* oops, not lzma! */
 				fatal("CONF.FILE error. Invalid compression method %s specified\n", parametervalue);
 		}

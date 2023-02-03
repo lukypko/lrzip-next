@@ -82,7 +82,7 @@ i64 get_ram(rzip_control *control)
 #ifdef __APPLE__
 # include <sys/sysctl.h>
 	int mib[2];
-	size_t len;
+	size_t len=sizeof(size_t);	/* must set len to size of size_t */
 	i64 ramsize;
 
 	mib[0] = CTL_HW;
@@ -203,7 +203,10 @@ bool write_magic(rzip_control *control)
 		 * zpaq_bs = magic byte & 0X0F
 		 * zpaq_level = magic_byte >> 4
 		 */
-	}
+	} else if (BZIP3_COMPRESS)
+		/* bzip3 block size codes will be 0-8, so set all high order bits to
+		 * distinguish from zpaq, then add actual block size code */
+		magic[17] = 0b11110000 + bzip3_prop_from_block_size(control->bzip3_block_size);
 
 	/* save compression levels
 	 * high order bits, rzip compression level
@@ -243,14 +246,25 @@ static inline i64 enc_loops(uchar b1, uchar b2)
 
 static void  get_comment(rzip_control *control, int fd_in, unsigned char *magic)
 {
-	if (unlikely(!(control->comment = malloc(magic[19]+1))))
+	int i;
+	char tmpchar;
+	if (unlikely(!(control->comment = calloc(magic[19]+1, 1))))
 		fatal("Failed to allocate memory for comment\n");
-	/* read comment */
-	if (unlikely(read(fd_in, control->comment, magic[19]) != magic[19]))
+	/* read comment
+	 * use getchar() in case coming from STDIN
+	*/
+	if (STDIN) {
+		for ( i = 0; i < magic[19]; i++) {
+			tmpchar = getchar();
+			if (unlikely(tmpchar == EOF))
+				fatal("Reached end of file before reading comment\n");
+			control->comment[i] = (char)tmpchar;
+		}
+	}
+	else if (unlikely(read(fd_in, control->comment, magic[19]) != magic[19]))
 		fatal("Failed to read comment\n");
 
 	control->comment_length = magic[19];
-	control->comment[control->comment_length] = '\0';
 	return;
 }
 
@@ -400,11 +414,18 @@ static void get_magic_v8(rzip_control *control, unsigned char *magic)
 		for (i = 0; i < 4; i++)						// lzma2 to lzma dictionary expansion
 			control->lzma_properties[1 + i] = (Byte)(control->dictSize >> (8 * i));
 	}
-	else if (magic[17] & 0b10000000)	// zpaq block and compression level stored
+	else if ((magic[17] & 0b10000000))				// bzip3 or zpaq block sizes/levels stored
 	{
-		control->zpaq_bs = magic[17] & 0b00001111;	// low order bits are block size
-		magic[17] &= 0b01110000;			// strip high bit
-		control->zpaq_level = magic[17] >> 4;		// divide by 16
+		if ((magic[17] & 0b11110000) == 0b11110000) {		// bzip3 block size
+			control->bzip3_bs = magic[17] & 0b00001111;	// bzip3 block size code 0 to 8
+			control->bzip3_block_size = BZIP3_BLOCK_SIZE_FROM_PROP(control->bzip3_bs);	// Real Block Size
+		}
+		else 							// zpaq block and compression level stored
+		{
+			control->zpaq_bs = magic[17] & 0b00001111;	// low order bits are block size
+			magic[17] &= 0b01110000;			// strip high bit
+			control->zpaq_level = magic[17] >> 4;		// divide by 16
+		}
 	}
 
 	get_hash_from_magic(control, &magic[14]);
@@ -448,6 +469,7 @@ static bool get_magic(rzip_control *control, int fd_in, unsigned char *magic)
 			get_magic_v8(control, magic);
 			break;
 		case 9:	/* version 0.9 adds two bytes */
+		case 10:
 			get_magic_v8(control, magic);
 			get_magic_v9(control, fd_in, magic);
 			break;
@@ -1026,7 +1048,9 @@ bool get_fileinfo(rzip_control *control)
 					break;
 				case 8: ofs = 20;
 					break;
-				case 9: ofs = 22 + control->comment_length;	/* comment? Add length */
+				case 9:
+				case 10:
+					ofs = 22 + control->comment_length;	/* comment? Add length */
 					break;
 			}
 			ofs += chunk_byte;
@@ -1041,7 +1065,9 @@ bool get_fileinfo(rzip_control *control)
 				switch (control->minor_version) {
 					case 8:	ofs = 20;
 						break;
-					case 9: ofs = 22 + control->comment_length;
+					case 9:
+					case 10:
+						ofs = 22 + control->comment_length;
 						break;
 					default: fatal("Cannot decrypt earlier versions of lrzip-next\n");
 						 break;
@@ -1121,6 +1147,8 @@ next_chunk:
 				if (INFO) print_verbose("gzip");
 			} else if (ctype == CTYPE_ZPAQ) {
 				if (INFO) print_verbose("zpaq");
+			} else if (ctype == CTYPE_BZIP3) {
+				if (INFO) print_verbose("bzip3");
 			} else
 				fatal("Unknown Compression Type: %'d\n", ctype);
 			if (save_ctype == 255)
@@ -1217,6 +1245,9 @@ done:
 						(1 << control->zpaq_bs));
 			else	// early 0.8 or <0.8 file without zpaq coding in magic header
 				print_output("\n");
+		}
+		else if (save_ctype == CTYPE_BZIP3) {
+			print_output("rzip + bzip3 -- Block Size: %d - %'"PRIu32"\n", control->bzip3_bs, control->bzip3_block_size);
 		}
 		else
 			print_output("Dunno wtf\n");
@@ -1604,7 +1635,9 @@ bool decompress_file(rzip_control *control)
 		if (!VERBOSE) print_progress("\n");	// output LF to prevent overwriing decompression output
 	}
 	show_version(control);	// show version here to preserve output formatting
-	print_progress("Decompressing...");
+	print_progress("Decompressing...\n");
+	if (control->comment_length)
+		print_progress("Archive Comment: %s\n", control->comment);
 
 	if (unlikely(runzip_fd(control, fd_in, fd_out, fd_hist, expected_size) < 0)) {
 		clear_rulist(control);
