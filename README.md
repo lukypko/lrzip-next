@@ -1,6 +1,55 @@
 lrzip-next - Long Range ZIP
 ======================
 
+# my updates over the original version
+
+- added support for compression/decompression of multiple files/folders
+- removed support for compression of input stream
+- removed support for decompression to output stream
+- works only on 64bit Linux
+
+- compressing of input stream does not have sense because it did not compress entire input just small part of data loaded into a memory (called *chunk* in a source code)
+
+### Build
+
+- my implementation is in branch `files1`
+
+~~~
+git clone https://github.com/lukypko/lrzip-next
+cd lrzip-next
+git checkout files1
+./autogen.sh
+./configure
+make
+~~~
+
+output binary is in `src/lrzip-next`
+
+
+### Usage
+
+compress multiple files/folders
+~~~
+lrzip-next -o <output file name> <input file/folder1>  <input file/folder2> <input file/folder3>  ...
+~~~
+
+decompress multiple files/folders
+~~~
+lrzip-next -d -O <output folder name> <input lrzip file> 
+~~~
+
+### current state and the future
+
+- decompress only selected files/folder from an lrzip archive
+- append to archive without recompression
+- mount a lrzip archive and have a random access to archive files
+
+
+- my code is messy, memory is not deallocated and, bad error reporting
+
+
+# original README.md
+
 ## LZMA SDK 22.01 (October 2022)
 
 Tag v0.10.0
