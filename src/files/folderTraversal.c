@@ -45,6 +45,8 @@ struct folderTraversal* traverse_init(char *path) {
 /**
  * Make a canonical path of `src` path
  * `pwd` - current folder
+ *
+ * I have used this instead of `realpath` method, but I don't remember a reason
  */
 static char* normalizePath(char *pwd, const char *src, char *res) {
 	size_t res_len;

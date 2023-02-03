@@ -570,11 +570,14 @@ void files_serialize(struct rzip_files *rzipFiles, int fileDescriptor)
  * comparator for a binarySearchTree of type `struct rzip_file *`
  * Comparing based on offset of a file
  */
-static int rzip_file_binary_tree_comparator_node(struct rzip_file *file1, struct rzip_file *file2)
+static int rzip_file_binary_tree_comparator_node(void* file1, void* file2)
 {
 
-	int64_t *first = &file1->dataOffset;
-	int64_t *second = &file2->dataOffset;
+	int64_t *first = &((struct rzip_file *)file1)->dataOffset;
+	int64_t *second = &((struct rzip_file *)file2)->dataOffset;
+
+//	int64_t *first = &file1->dataOffset;
+//	int64_t *second = &file2->dataOffset;
 
 	// 0 or -1 or 1
 	//return (*first > *second) - (*first < *second);
@@ -585,13 +588,64 @@ static int rzip_file_binary_tree_comparator_node(struct rzip_file *file1, struct
  * comparator for a value and a binarySearchTree of type `struct rzip_file *`
  * Comparing based on offset of a file
  */
-static int rzip_file_binary_tree_comparator_search(int64_t *value, struct rzip_file *file2)
+static int rzip_file_binary_tree_comparator_search(void *value, void *file2)
 {
+
+	int64_t *first = (int64_t *)value;
+	struct rzip_file *second = (struct rzip_file *)file2;
+
 	// if value is in range, return 0
 	// if value is before range, return -1
 	// if value is after range, return 1
-	return *value < file2->dataOffset ? -1 : *value >= file2->dataEndByte ? 1 : 0;
+	return *first < second->dataOffset ? -1 : *first >= second->dataEndByte ? 1 : 0;
 }
+
+/**
+ * find first mapping file based on binary search tree
+ */
+inline static struct rzip_file* findFirstMappingFileTree(struct rzip_files_buffer *buffer, int64_t offset)
+{
+
+	struct rzip_file *rzip_fileItem = binarySearchTree_search(buffer->origin->decompressionTree, &offset);
+	if (rzip_fileItem != NULL) {
+		return rzip_fileItem;
+	}
+
+	printf("FATAL input buffer %lu out of range!\n", offset);
+	exit(1);
+}
+
+/**
+ * find first mapping file based on linked list
+ */
+inline static struct rzip_file* findFirstMappingFileLink(struct rzip_files_buffer *buffer, int64_t offset)
+{
+
+	struct linked_list_item *listItem = buffer->origin->rzip_files->start;
+//	buffer->rzip_files->start = NULL;
+//	buffer->rzip_files->end = NULL;
+
+	while (listItem != NULL) {
+
+		struct rzip_file *rzip_fileItem = listItem->item;
+
+		if (rzip_fileItem->dataEndByte > offset) {
+
+			// found a start
+//			buffer->rzip_files->start = listItem;
+			return rzip_fileItem;
+		}
+
+		// move to the next file in the list
+		listItem = listItem->next;
+	}
+
+	printf("FATAL input buffer %lu out of range!\n", offset);
+	exit(1);
+
+	return NULL;
+}
+
 
 /**
  * Generate a binary search tree from sorted `struct rzip_file`
@@ -604,9 +658,11 @@ static void generateBinarySearchTree(struct rzip_files *rzipFiles)
 	if(linkedList_count(rzipFiles->rzip_files)>20) {
 		printf("Using a binary search tree to search segments\n");
 		rzipFiles->decompressionTree = binarySearchTree_init(&rzip_file_binary_tree_comparator_node, &rzip_file_binary_tree_comparator_search, rzipFiles->rzip_files);
+		rzipFiles->findMappingFile=&findFirstMappingFileTree;
+
 	} else {
 		printf("Using a linked list to search segments\n");
-		rzipFiles->decompressionTree=NULL;
+		rzipFiles->findMappingFile=&findFirstMappingFileLink;
 	}
 }
 
@@ -814,51 +870,6 @@ int64_t remap_count = 0;
 //	return NULL;
 //}
 
-/**
- * find first mapping file based on binary search tree
- */
-inline static struct rzip_file* findFirstMappingFileTree(struct rzip_files_buffer *buffer, int64_t offset)
-{
-
-	struct rzip_file *rzip_fileItem = binarySearchTree_search(buffer->origin->decompressionTree, &offset);
-	if (rzip_fileItem != NULL) {
-		return rzip_fileItem;
-	}
-
-	printf("FATAL input buffer %lu out of range!\n", offset);
-	exit(1);
-}
-
-/**
- * find first mapping file based on linked list
- */
-inline static struct rzip_file* findFirstMappingFileLink(struct rzip_files_buffer *buffer, int64_t offset)
-{
-
-	struct linked_list_item *listItem = buffer->origin->rzip_files->start;
-//	buffer->rzip_files->start = NULL;
-//	buffer->rzip_files->end = NULL;
-
-	while (listItem != NULL) {
-
-		struct rzip_file *rzip_fileItem = listItem->item;
-
-		if (rzip_fileItem->dataEndByte > offset) {
-
-			// found a start
-//			buffer->rzip_files->start = listItem;
-			return rzip_fileItem;
-		}
-
-		// move to the next file in the list
-		listItem = listItem->next;
-	}
-
-	printf("FATAL input buffer %lu out of range!\n", offset);
-	exit(1);
-
-	return NULL;
-}
 
 /**
  * Remmap of files which are already mapped.
@@ -872,17 +883,7 @@ inline void files_mapCached(struct rzip_files_buffer *buffer, int64_t offset)
 
 	remap_count++;
 
-	struct rzip_file *rzip_fileItem;
-
-	// if there are just a few items, use findFirstMappingFileLink
-	// TODO: use a function reference as there is no need to test which impl to use
-	if(buffer->origin->decompressionTree!=NULL) {
-
-		rzip_fileItem = findFirstMappingFileTree(buffer, offset);
-	} else {
-
-		rzip_fileItem = findFirstMappingFileLink(buffer, offset);
-	}
+	struct rzip_file *rzip_fileItem = buffer->origin->findMappingFile(buffer, offset);
 
 	buffer->buffer = rzip_fileItem->preMappedFile;
 	buffer->offset = rzip_fileItem->dataOffset;

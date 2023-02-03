@@ -64,38 +64,38 @@ static bool afterRecursion(struct stack *stack, int *codeSegment, int64_t *start
 	return exist;
 }
 
-static struct binary_search_tree_node* walkRecursive(struct binary_search_tree *tree, int64_t start, int64_t end)
-{
+//static struct binary_search_tree_node* walkRecursive(struct binary_search_tree *tree, int64_t start, int64_t end)
+//{
+//
+//	struct binary_search_tree_node *newItem;
+//
+//	if (start > end) {
+//
+//		printf("Return 0(NULL)\n");
+//		return NULL;
+//	}
+//
+//	int64_t middle = (start + end) / 2;
+//	newItem = malloc(sizeof(struct binary_search_tree_node));
+//	newItem->value = tree->sourceItems[middle];
+//
+//	newItem->left = walkRecursive(tree, start, middle - 1);
+//	printf("Setting value of %d->left to %d\n", newItem->value, newItem->left != NULL ? newItem->left->value : NULL);
+//	newItem->right = walkRecursive(tree, middle + 1, end);
+//	printf("Setting value of %d->right to %d\n", newItem->value, newItem->right != NULL ? newItem->right->value : NULL);
+//
+//	printf("Return %d\n", newItem->value);
+//	return newItem;
+//}
 
-	struct binary_search_tree_node *newItem;
-
-	if (start > end) {
-
-		printf("Return 0(NULL)\n");
-		return NULL;
-	}
-
-	int64_t middle = (start + end) / 2;
-	newItem = malloc(sizeof(struct binary_search_tree_node));
-	newItem->value = tree->sourceItems[middle];
-
-	newItem->left = walkRecursive(tree, start, middle - 1);
-	printf("Setting value of %d->left to %d\n", newItem->value, newItem->left != NULL ? newItem->left->value : NULL);
-	newItem->right = walkRecursive(tree, middle + 1, end);
-	printf("Setting value of %d->right to %d\n", newItem->value, newItem->right != NULL ? newItem->right->value : NULL);
-
-	printf("Return %d\n", newItem->value);
-	return newItem;
-}
-
-/**
- * Recursive version
- */
-static void walk1(struct binary_search_tree *tree)
-{
-
-	tree->root = walkRecursive(tree, 0, tree->nodeCount - 1);
-}
+///**
+// * Recursive version
+// */
+//static void walk1(struct binary_search_tree *tree)
+//{
+//
+//	tree->root = walkRecursive(tree, 0, tree->nodeCount - 1);
+//}
 
 /**
  *
@@ -127,74 +127,74 @@ static void walk1(struct binary_search_tree *tree)
  return root;
  }
  */
-static void walk2(struct binary_search_tree *tree)
-{
-
-	int64_t start = 0;
-	int64_t end = tree->nodeCount - 1;
-
-	int codeSegment = 0;
-
-	struct stack *stack = stack_init();
-	struct binary_search_tree_node *newItem;
-	struct binary_search_tree_node *returnValue;
-
-	while (true) {
-
-		// as we are storing only start and end, then middle have to be computed
-		int64_t middle = (start + end) / 2;
-
-		switch (codeSegment) {
-
-		case 0:
-
-			if (start > end) {
-
-				returnValue = NULL;
-
-				if (!afterRecursion(stack, &codeSegment, &start, &end, &newItem)) {
-					goto cycleDone;
-				}
-				break;
-			}
-
-			newItem = malloc(sizeof(struct binary_search_tree_node));
-			newItem->value = tree->sourceItems[middle];
-
-			int v = 1;
-			beforeRecursion(stack, 1, &start, &end, newItem);
-			end = middle - 1;
-			break;
-		case 1:
-
-			newItem->left = returnValue;
-			printf("Setting value of %d->left to %d\n", newItem->value, returnValue != NULL ? returnValue->value : NULL);
-			v = 2;
-			beforeRecursion(stack, 2, &start, &end, newItem);
-
-			start = middle + 1;
-			codeSegment = 0;
-
-			break;
-
-		case 2:
-
-			newItem->right = returnValue;
-			printf("Setting value of %d->right to %d\n", newItem->value, returnValue != NULL ? returnValue->value : NULL);
-			returnValue = newItem;
-
-			if (!afterRecursion(stack, &codeSegment, &start, &end, &newItem)) {
-				goto cycleDone;
-			}
-			break;
-		}
-
-	}
-
-	cycleDone:
-
-	tree->root = returnValue;
-}
+//static void walk2(struct binary_search_tree *tree)
+//{
+//
+//	int64_t start = 0;
+//	int64_t end = tree->nodeCount - 1;
+//
+//	int codeSegment = 0;
+//
+//	struct stack *stack = stack_init();
+//	struct binary_search_tree_node *newItem;
+//	struct binary_search_tree_node *returnValue;
+//
+//	while (true) {
+//
+//		// as we are storing only start and end, then middle have to be computed
+//		int64_t middle = (start + end) / 2;
+//
+//		switch (codeSegment) {
+//
+//		case 0:
+//
+//			if (start > end) {
+//
+//				returnValue = NULL;
+//
+//				if (!afterRecursion(stack, &codeSegment, &start, &end, &newItem)) {
+//					goto cycleDone;
+//				}
+//				break;
+//			}
+//
+//			newItem = malloc(sizeof(struct binary_search_tree_node));
+//			newItem->value = tree->sourceItems[middle];
+//
+//			int v = 1;
+//			beforeRecursion(stack, 1, &start, &end, newItem);
+//			end = middle - 1;
+//			break;
+//		case 1:
+//
+//			newItem->left = returnValue;
+//			printf("Setting value of %d->left to %d\n", newItem->value, returnValue != NULL ? returnValue->value : NULL);
+//			v = 2;
+//			beforeRecursion(stack, 2, &start, &end, newItem);
+//
+//			start = middle + 1;
+//			codeSegment = 0;
+//
+//			break;
+//
+//		case 2:
+//
+//			newItem->right = returnValue;
+//			printf("Setting value of %d->right to %d\n", newItem->value, returnValue != NULL ? returnValue->value : NULL);
+//			returnValue = newItem;
+//
+//			if (!afterRecursion(stack, &codeSegment, &start, &end, &newItem)) {
+//				goto cycleDone;
+//			}
+//			break;
+//		}
+//
+//	}
+//
+//	cycleDone:
+//
+//	tree->root = returnValue;
+//}
 
 static void walk3(struct binary_search_tree *tree)
 {
@@ -304,14 +304,14 @@ struct binary_search_tree* binarySearchTree_init(int (*valueComparator)(void*/*v
 	return tree;
 }
 
-/**
- * Compare two items using a tree specified comparator.
- */
-static int binarySearchTree_compare(struct binary_search_tree *tree, void *item1, void *item2)
-{
-
-	return tree->valueComparator(item1, item2);
-}
+///**
+// * Compare two items using a tree specified comparator.
+// */
+//static int binarySearchTree_compare(struct binary_search_tree *tree, void *item1, void *item2)
+//{
+//
+//	return tree->valueComparator(item1, item2);
+//}
 
 ///**
 // * Add an item to the search tree.

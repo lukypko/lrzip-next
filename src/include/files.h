@@ -82,6 +82,12 @@ struct rzip_files {
 	 */
 	struct binary_search_tree *decompressionTree;
 
+	/**
+	 * reference to a function to get a mapping file,
+	 * implementations are linkedList or binarySearchTree based on items count
+	 */
+	struct rzip_file* (*findMappingFile)(struct rzip_files_buffer *buffer, int64_t offset);
+
 
 //	/**
 //	 * MMap all files to a virtual memory
