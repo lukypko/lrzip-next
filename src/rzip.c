@@ -981,7 +981,7 @@ void rzip_fd(rzip_control *control, int fd_out)
 	} else
 		control->st_size = 0;
 
-	int st_size = len;
+	i64 st_size = len;
 
 	if (!STDOUT) {
 		/* Check if there's enough free space on the device chosen to fit the
