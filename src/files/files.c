@@ -49,7 +49,7 @@ static char* getLocalFileName(char *path, char *baseFolder)
 }
 
 /**
- * Concatenate two paths, allocates a new buffer, add a `/`
+ * Concatenate two strings, allocates a new buffer
  */
 static char* concatStrings(char *first, char *second)
 {
@@ -60,7 +60,6 @@ static char* concatStrings(char *first, char *second)
 	char *newStr = malloc(sizeof(char) * (len1 + len2 + 1));
 	strcpy(newStr, first);
 	strcpy(newStr + len1, second);
-	newStr[len1 + len2 + 1] = 0;
 
 	return newStr;
 }
@@ -260,13 +259,28 @@ static struct rzip_file* createReadFileItem(struct rzip_files *rzip, struct fold
 	return fileItem;
 }
 
+/**
+ * Make a path recursively
+ */
+static int mkpath(char* file_path, mode_t mode) {
+    for (char* p = strchr(file_path + 1, '/'); p; p = strchr(p + 1, '/')) {
+        *p = '\0';
+        if (mkdir(file_path, mode) == -1) {
+            if (errno != EEXIST) {
+                *p = '/';
+                return -1;
+            }
+        }
+        *p = '/';
+    }
+    return 0;
+}
+
 static void createDestinationFolder(char *filePath)
 {
 
 	char *folderPath = strdup(filePath);
-	char *folderPath2 = dirname(folderPath);
-
-	mkdir(folderPath2, 0777);
+	mkpath(folderPath, 0777);
 
 	free(folderPath);
 }
@@ -285,21 +299,11 @@ static void createWriteFileItem(struct rzip_files *rzip, struct rzip_file *fileI
 		exit(1);
 	}
 
-//	iflseek(fd_out,fileItem->fileLength, SEEK_SET)==-1) {
-//		printf("Cannot seea files holder file");
-//				exit(1);
-//	}
-
-//	fileItem->fileLength = sourceFile->folderEntryStat.st_size;
-//	fileItem->isFolder = false;
-	//	fileItem->fileHandle = fd_in;
-
 	fileItem->preMappedFile = mmap(NULL, fileItem->fileLength,
 	PROT_READ,
 	MAP_SHARED, fd_out, 0);
 
 	fileItem->fileHandle = fd_out;
-	//fileItem->filePath = getLocalFileName(sourceFile->path, basePath);
 
 	free(fileItem->filePath);
 
